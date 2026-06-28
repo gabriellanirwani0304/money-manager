@@ -1,0 +1,27 @@
+# Environment
+.env
+*.env.local
+
+# Backend
+backend/tmp/
+backend/*.exe
+
+# Frontend / CMS
+cms/node_modules/
+cms/dist/
+cms/.vite/
+
+# Mobile
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

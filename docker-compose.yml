@@ -1,0 +1,50 @@
+name: money-manager
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: money-manager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-moneyuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-moneypass}
+      POSTGRES_DB: ${DB_NAME:-moneymanager}
+    ports:
+      - "5435:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./backend/migrations/001_init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./backend/migrations/002_seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
+      - ./backend/migrations/003_accounts.sql:/docker-entrypoint-initdb.d/03_accounts.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-moneyuser} -d ${DB_NAME:-moneymanager}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: money-manager-backend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      APP_PORT: 8080
+      APP_ENV: ${APP_ENV:-production}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-moneyuser}
+      DB_PASSWORD: ${DB_PASSWORD:-moneypass}
+      DB_NAME: ${DB_NAME:-moneymanager}
+      DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-168h}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
