@@ -6,7 +6,6 @@ import '../models/report_models.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../shared/widgets/money_card.dart';
-import '../../transaction/models/transaction_models.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -173,6 +172,12 @@ class _SummaryTab extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+          ],
+
+          // Smart Insights
+          if (provider.insights != null) ...[
+            _InsightsCard(insights: provider.insights!),
             const SizedBox(height: 20),
           ],
 
@@ -457,6 +462,123 @@ class _LegendItem extends StatelessWidget {
         Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
         Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+}
+
+class _InsightsCard extends StatelessWidget {
+  final ReportInsights insights;
+  const _InsightsCard({required this.insights});
+
+  @override
+  Widget build(BuildContext context) {
+    final trendIcon = switch (insights.trend) {
+      'improving' => ('📈', AppColors.income),
+      'worsening' => ('📉', AppColors.expense),
+      _ => ('➡️', AppColors.textSecondary),
+    };
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(title: '💡 Smart Insights'),
+          const SizedBox(height: 12),
+
+          // Savings rate
+          _InsightRow(
+            icon: '💰',
+            label: 'Tingkat Tabungan',
+            value: '${insights.savingsRate.toStringAsFixed(1)}%',
+            valueColor: insights.savingsRate >= 20 ? AppColors.income : AppColors.warning,
+          ),
+
+          // Top expense category
+          if (insights.topCategoryName != null) ...[
+            const Divider(height: 16),
+            _InsightRow(
+              icon: '🏆',
+              label: 'Kategori Terbesar',
+              value: '${insights.topCategoryName} (${insights.topCategoryPercent?.toStringAsFixed(0)}%)',
+            ),
+          ],
+
+          // Biggest single expense
+          if (insights.biggestExpenseDesc != null) ...[
+            const Divider(height: 16),
+            _InsightRow(
+              icon: '💸',
+              label: 'Pengeluaran Terbesar',
+              value: insights.biggestExpenseDesc!,
+            ),
+          ],
+
+          // Month over month
+          if (insights.expenseChangePercent != null) ...[
+            const Divider(height: 16),
+            _InsightRow(
+              icon: trendIcon.$1,
+              label: 'vs Bulan Lalu',
+              value: insights.expenseChangePercent! > 0
+                  ? '+${insights.expenseChangePercent!.toStringAsFixed(1)}% pengeluaran'
+                  : '${insights.expenseChangePercent!.toStringAsFixed(1)}% pengeluaran',
+              valueColor: insights.expenseChangePercent! > 0 ? AppColors.expense : AppColors.income,
+            ),
+          ],
+
+          // Budget exceeded
+          if (insights.budgetExceeded.isNotEmpty) ...[
+            const Divider(height: 16),
+            _InsightRow(
+              icon: '⚠️',
+              label: 'Budget Terlampaui',
+              value: insights.budgetExceeded.join(', '),
+              valueColor: AppColors.expense,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightRow extends StatelessWidget {
+  final String icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _InsightRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(icon, style: const TextStyle(fontSize: 16)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: valueColor ?? AppColors.textPrimary)),
+            ],
+          ),
+        ),
       ],
     );
   }

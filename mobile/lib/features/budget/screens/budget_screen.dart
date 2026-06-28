@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../providers/budget_provider.dart';
 import '../models/budget_models.dart';
 import '../../transaction/providers/transaction_provider.dart';
-import '../../transaction/models/transaction_models.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../shared/widgets/money_card.dart';
@@ -36,6 +35,19 @@ class _BudgetScreenState extends State<BudgetScreen> {
           ),
         ),
         actions: [
+          Consumer<BudgetProvider>(
+            builder: (_, p, __) => IconButton(
+              icon: p.copying
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                    )
+                  : const Icon(Icons.copy_all_rounded),
+              tooltip: 'Salin dari bulan lalu',
+              onPressed: p.copying ? null : () => _copyFromPrevMonth(context),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.chevron_left_rounded),
             onPressed: () {
@@ -117,6 +129,28 @@ class _BudgetScreenState extends State<BudgetScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _copyFromPrevMonth(BuildContext context) async {
+    final p = context.read<BudgetProvider>();
+    final copied = await p.copyFromPrevMonth();
+    if (!context.mounted) return;
+    if (copied < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(p.error ?? 'Gagal menyalin budget'), backgroundColor: AppColors.expense),
+      );
+    } else if (copied == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Semua budget sudah ada, tidak ada yang perlu disalin')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$copied budget berhasil disalin dari bulan lalu 🎯'),
+          backgroundColor: AppColors.income,
+        ),
+      );
+    }
   }
 
   void _showAddDialog(BuildContext context) {

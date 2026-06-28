@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
+import 'dart:typed_data';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../models/transaction_models.dart';
@@ -109,10 +110,15 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<void> loadCategories({String? type}) async {
     try {
-      final params = <String, dynamic>{};
+      final params = <String, dynamic>{'limit': 100};
       if (type != null) params['type'] = type;
       final res = await dio.get(ApiConstants.categories, queryParameters: params);
-      _categories = (res.data['data'] as List<dynamic>)
+      // Handle both paginated { categories: [...] } and legacy flat array
+      final data = res.data['data'];
+      final list = data is List
+          ? data
+          : (data['categories'] as List<dynamic>? ?? []);
+      _categories = list
           .map((e) => CategoryModel.fromJson(e as Map<String, dynamic>))
           .toList();
       notifyListeners();
@@ -120,22 +126,26 @@ class TransactionProvider extends ChangeNotifier {
   }
 
   Future<bool> create({
-    required String categoryId,
+    String? categoryId,
     required String type,
     required double amount,
     required String description,
     required String date,
-    String accountId = '',
+    String? accountId,
+    String? toAccountId,
   }) async {
     try {
-      await dio.post(ApiConstants.transactions, data: {
-        'category_id': categoryId,
-        'account_id': accountId,
+      final body = <String, dynamic>{
         'type': type,
         'amount': amount,
         'description': description,
         'date': date,
-      });
+      };
+      if (categoryId != null && categoryId.isNotEmpty) body['category_id'] = categoryId;
+      if (accountId != null && accountId.isNotEmpty) body['account_id'] = accountId;
+      if (toAccountId != null && toAccountId.isNotEmpty) body['to_account_id'] = toAccountId;
+
+      await dio.post(ApiConstants.transactions, data: body);
       await load();
       return true;
     } on DioException catch (e) {
@@ -147,28 +157,45 @@ class TransactionProvider extends ChangeNotifier {
 
   Future<bool> update({
     required String id,
-    required String categoryId,
+    String? categoryId,
     required String type,
     required double amount,
     required String description,
     required String date,
-    String accountId = '',
+    String? accountId,
+    String? toAccountId,
   }) async {
     try {
-      await dio.put(ApiConstants.transactionById(id), data: {
-        'category_id': categoryId,
-        'account_id': accountId,
+      final body = <String, dynamic>{
         'type': type,
         'amount': amount,
         'description': description,
         'date': date,
-      });
+      };
+      if (categoryId != null && categoryId.isNotEmpty) body['category_id'] = categoryId;
+      if (accountId != null && accountId.isNotEmpty) body['account_id'] = accountId;
+      if (toAccountId != null && toAccountId.isNotEmpty) body['to_account_id'] = toAccountId;
+
+      await dio.put(ApiConstants.transactionById(id), data: body);
       await load();
       return true;
     } on DioException catch (e) {
       _error = ApiException.fromDio(e).message;
       notifyListeners();
       return false;
+    }
+  }
+
+  Future<Uint8List?> exportCsv({required String startDate, required String endDate}) async {
+    try {
+      final res = await dio.get(
+        ApiConstants.transactionsExport,
+        queryParameters: {'start_date': startDate, 'end_date': endDate},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(res.data as List<int>);
+    } on DioException {
+      return null;
     }
   }
 

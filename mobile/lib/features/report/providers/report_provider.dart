@@ -9,6 +9,7 @@ class ReportProvider extends ChangeNotifier {
   List<CategoryBreakdown> _breakdownExpense = [];
   List<CategoryBreakdown> _breakdownIncome = [];
   MonthlySummary? _summary;
+  ReportInsights? _insights;
   bool _loading = false;
   String? _error;
   int _month = DateTime.now().month;
@@ -18,6 +19,7 @@ class ReportProvider extends ChangeNotifier {
   List<CategoryBreakdown> get breakdownExpense => _breakdownExpense;
   List<CategoryBreakdown> get breakdownIncome => _breakdownIncome;
   MonthlySummary? get summary => _summary;
+  ReportInsights? get insights => _insights;
   bool get loading => _loading;
   String? get error => _error;
   int get month => _month;
@@ -39,6 +41,7 @@ class ReportProvider extends ChangeNotifier {
         dio.get(ApiConstants.reportMonthly),
         dio.get(ApiConstants.reportByCategory, queryParameters: {...params, 'type': 'expense'}),
         dio.get(ApiConstants.reportByCategory, queryParameters: {...params, 'type': 'income'}),
+        dio.get(ApiConstants.reportInsights),
       ]);
 
       _summary = MonthlySummary.fromJson(results[0].data['data'] as Map<String, dynamic>);
@@ -54,6 +57,12 @@ class ReportProvider extends ChangeNotifier {
       _breakdownIncome = (results[3].data['data'] as List<dynamic>? ?? [])
           .map((e) => CategoryBreakdown.fromJson(e as Map<String, dynamic>))
           .toList();
+
+      try {
+        _insights = ReportInsights.fromJson(results[4].data['data'] as Map<String, dynamic>);
+      } catch (_) {
+        _insights = null;
+      }
     } on DioException catch (e) {
       _error = ApiException.fromDio(e).message;
     } finally {

@@ -27,6 +27,10 @@ dependencies:
   # Local preferences
   shared_preferences: ^2.3.0
 
+  # File sharing & saving (CSV export)
+  share_plus: ^10.0.0
+  path_provider: ^2.1.5
+
   # Icons
   cupertino_icons: ^1.0.8
 

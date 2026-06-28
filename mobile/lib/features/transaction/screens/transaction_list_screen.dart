@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../providers/transaction_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -70,6 +73,11 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                 context.read<TransactionProvider>().clearFilters();
               }
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Export CSV',
+            onPressed: _showExportDialog,
           ),
           IconButton(
             icon: const Icon(Icons.filter_list_rounded),
@@ -217,6 +225,107 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     );
   }
 
+  Future<void> _showExportDialog() async {
+    final now = DateTime.now();
+    DateTime startDate = DateTime(now.year, now.month, 1);
+    DateTime endDate = DateTime(now.year, now.month + 1, 0);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Export CSV'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Rentang tanggal:', style: TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: startDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) setState(() => startDate = picked);
+                      },
+                      child: Text(
+                        '${startDate.day}/${startDate.month}/${startDate.year}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('—'),
+                  ),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: endDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now().add(const Duration(days: 1)),
+                        );
+                        if (picked != null) setState(() => endDate = picked);
+                      },
+                      child: Text(
+                        '${endDate.day}/${endDate.month}/${endDate.year}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Export')),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final fmt = (DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    try {
+      final bytes = await context.read<TransactionProvider>().exportCsv(
+            startDate: fmt(startDate),
+            endDate: fmt(endDate),
+          );
+
+      if (bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gagal mengunduh CSV'), backgroundColor: AppColors.expense),
+          );
+        }
+        return;
+      }
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/transaksi_${fmt(startDate)}_${fmt(endDate)}.csv');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles([XFile(file.path)], text: 'Export transaksi');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.expense),
+        );
+      }
+    }
+  }
+
   void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
@@ -304,6 +413,14 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final tx = transaction;
     final isIncome = tx.type == 'income';
+    final isTransfer = tx.type == 'transfer';
+    final amtColor = isTransfer
+        ? AppColors.primary
+        : (isIncome ? AppColors.income : AppColors.expense);
+    final amtPrefix = isTransfer ? '🔄' : (isIncome ? '+' : '-');
+    final subtitle = isTransfer
+        ? 'Transfer • ${DateFormatter.timeAgo(tx.date)}'
+        : '${tx.category?.name ?? ''} • ${DateFormatter.timeAgo(tx.date)}';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -311,24 +428,36 @@ class _TransactionTile extends StatelessWidget {
         onTap: onEdit,
         child: Row(
           children: [
-            CategoryIconWidget(
-              icon: tx.category?.icon ?? 'category',
-              color: tx.category?.color ?? '#6366F1',
-            ),
+            isTransfer
+                ? Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.swap_horiz_rounded, color: AppColors.primary, size: 20),
+                  )
+                : CategoryIconWidget(
+                    icon: tx.category?.icon ?? 'category',
+                    color: tx.category?.color ?? '#6366F1',
+                  ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    tx.description.isNotEmpty ? tx.description : (tx.category?.name ?? ''),
+                    tx.description.isNotEmpty
+                        ? tx.description
+                        : (isTransfer ? 'Transfer' : (tx.category?.name ?? '')),
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${tx.category?.name ?? ''} • ${DateFormatter.timeAgo(tx.date)}',
+                    subtitle,
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   ),
                 ],
@@ -338,9 +467,9 @@ class _TransactionTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${isIncome ? '+' : '-'} ${CurrencyFormatter.compact(tx.amount)}',
+                  '$amtPrefix ${CurrencyFormatter.compact(tx.amount)}',
                   style: TextStyle(
-                    color: isIncome ? AppColors.income : AppColors.expense,
+                    color: amtColor,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),

@@ -27,7 +27,9 @@ class CategoryModel {
 
 class TransactionModel {
   final String id;
-  final String categoryId;
+  final String? categoryId;
+  final String? accountId;
+  final String? toAccountId;
   final CategoryModel? category;
   final String type;
   final double amount;
@@ -37,7 +39,9 @@ class TransactionModel {
 
   const TransactionModel({
     required this.id,
-    required this.categoryId,
+    this.categoryId,
+    this.accountId,
+    this.toAccountId,
     this.category,
     required this.type,
     required this.amount,
@@ -47,10 +51,13 @@ class TransactionModel {
   });
 
   bool get isIncome => type == 'income';
+  bool get isTransfer => type == 'transfer';
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) => TransactionModel(
         id: json['id'] as String,
-        categoryId: json['category_id'] as String,
+        categoryId: json['category_id'] as String?,
+        accountId: json['account_id'] as String?,
+        toAccountId: json['to_account_id'] as String?,
         category: json['category'] != null
             ? CategoryModel.fromJson(json['category'] as Map<String, dynamic>)
             : null,

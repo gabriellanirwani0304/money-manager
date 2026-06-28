@@ -26,22 +26,28 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
   String _type = 'expense';
   String? _selectedCategoryId;
   String? _selectedAccountId;
+  String? _selectedToAccountId;
   DateTime _selectedDate = DateTime.now();
   bool _submitting = false;
 
   bool get isEditing => widget.existing != null;
+  bool get isTransfer => _type == 'transfer';
+
+  static const _types = ['expense', 'income', 'transfer'];
 
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this);
     _tabCtrl.addListener(() {
       if (!_tabCtrl.indexIsChanging) {
         setState(() {
-          _type = _tabCtrl.index == 0 ? 'expense' : 'income';
+          _type = _types[_tabCtrl.index];
           _selectedCategoryId = null;
         });
-        context.read<TransactionProvider>().loadCategories(type: _type);
+        if (!isTransfer) {
+          context.read<TransactionProvider>().loadCategories(type: _type);
+        }
       }
     });
 
@@ -51,12 +57,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
       _amountCtrl.text = e.amount.toStringAsFixed(0);
       _descCtrl.text = e.description;
       _selectedCategoryId = e.categoryId;
+      _selectedAccountId = e.accountId;
+      _selectedToAccountId = e.toAccountId;
       _selectedDate = DateTime.tryParse(e.date) ?? DateTime.now();
-      _tabCtrl.index = _type == 'expense' ? 0 : 1;
+      _tabCtrl.index = _types.indexOf(_type).clamp(0, 2);
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TransactionProvider>().loadCategories(type: _type);
+      if (!isTransfer) {
+        context.read<TransactionProvider>().loadCategories(type: _type);
+      }
       context.read<AccountProvider>().load();
     });
   }
@@ -87,9 +97,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCategoryId == null) {
+    if (!isTransfer && _selectedCategoryId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Pilih kategori terlebih dahulu')),
+      );
+      return;
+    }
+    if (isTransfer && (_selectedAccountId == null || _selectedToAccountId == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pilih rekening asal dan tujuan')),
+      );
+      return;
+    }
+    if (isTransfer && _selectedAccountId == _selectedToAccountId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rekening asal dan tujuan tidak boleh sama')),
       );
       return;
     }
@@ -103,8 +125,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
     if (isEditing) {
       ok = await provider.update(
         id: widget.existing!.id,
-        categoryId: _selectedCategoryId!,
-        accountId: _selectedAccountId ?? '',
+        categoryId: _selectedCategoryId,
+        accountId: _selectedAccountId,
+        toAccountId: _selectedToAccountId,
         type: _type,
         amount: amount,
         description: _descCtrl.text.trim(),
@@ -112,8 +135,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
       );
     } else {
       ok = await provider.create(
-        categoryId: _selectedCategoryId!,
-        accountId: _selectedAccountId ?? '',
+        categoryId: _selectedCategoryId,
+        accountId: _selectedAccountId,
+        toAccountId: _selectedToAccountId,
         type: _type,
         amount: amount,
         description: _descCtrl.text.trim(),
@@ -142,8 +166,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
   @override
   Widget build(BuildContext context) {
     final isExpense = _type == 'expense';
-    final gradient = isExpense ? AppColors.expenseGradient : AppColors.incomeGradient;
-    final color = isExpense ? AppColors.expense : AppColors.income;
+    final gradient = isTransfer
+        ? AppColors.primaryGradient
+        : (isExpense ? AppColors.expenseGradient : AppColors.incomeGradient);
+    final color = isTransfer
+        ? AppColors.primary
+        : (isExpense ? AppColors.expense : AppColors.income);
 
     return Scaffold(
       body: Container(
@@ -191,10 +219,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                       ),
                       labelColor: color,
                       unselectedLabelColor: Colors.white,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                       tabs: const [
-                        Tab(text: '📉 Pengeluaran'),
-                        Tab(text: '📈 Pemasukan'),
+                        Tab(text: '📉 Keluar'),
+                        Tab(text: '📈 Masuk'),
+                        Tab(text: '🔄 Transfer'),
                       ],
                     ),
                   ),
@@ -241,64 +270,66 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                         children: [
                           const SizedBox(height: 4),
 
-                          // Category picker
-                          const Text('Kategori',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                          const SizedBox(height: 12),
-                          Consumer<TransactionProvider>(
-                            builder: (_, p, __) {
-                              final cats = p.categories;
-                              if (cats.isEmpty) {
-                                return const Center(
-                                    child: CircularProgressIndicator(color: AppColors.primary));
-                              }
-                              return Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: cats.map((cat) {
-                                  final selected = _selectedCategoryId == cat.id;
-                                  final catColor = _parseColor(cat.color);
-                                  return GestureDetector(
-                                    onTap: () => setState(() => _selectedCategoryId = cat.id),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: selected
-                                            ? catColor.withOpacity(0.15)
-                                            : Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: selected ? catColor : AppColors.divider,
-                                          width: selected ? 2 : 1,
-                                        ),
-                                        boxShadow: selected
-                                            ? [BoxShadow(color: catColor.withOpacity(0.2), blurRadius: 8)]
-                                            : null,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          CategoryIconWidget(
-                                              icon: cat.icon, color: cat.color, size: 28),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            cat.name,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: selected ? catColor : AppColors.textPrimary,
-                                            ),
+                          // Category picker (hidden for transfer)
+                          if (!isTransfer) ...[
+                            const Text('Kategori',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                            const SizedBox(height: 12),
+                            Consumer<TransactionProvider>(
+                              builder: (_, p, __) {
+                                final cats = p.categories;
+                                if (cats.isEmpty) {
+                                  return const Center(
+                                      child: CircularProgressIndicator(color: AppColors.primary));
+                                }
+                                return Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: cats.map((cat) {
+                                    final selected = _selectedCategoryId == cat.id;
+                                    final catColor = _parseColor(cat.color);
+                                    return GestureDetector(
+                                      onTap: () => setState(() => _selectedCategoryId = cat.id),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: selected
+                                              ? catColor.withOpacity(0.15)
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: selected ? catColor : AppColors.divider,
+                                            width: selected ? 2 : 1,
                                           ),
-                                        ],
+                                          boxShadow: selected
+                                              ? [BoxShadow(color: catColor.withOpacity(0.2), blurRadius: 8)]
+                                              : null,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            CategoryIconWidget(
+                                                icon: cat.icon, color: cat.color, size: 28),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              cat.name,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: selected ? catColor : AppColors.textPrimary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                }).toList(),
-                              );
-                            },
-                          ),
+                                    );
+                                  }).toList(),
+                                );
+                              },
+                            ),
+                          ],
 
                           const SizedBox(height: 20),
 
@@ -310,49 +341,51 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(children: [
-                                    const Text('Rekening',
-                                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                                    const SizedBox(width: 6),
-                                    const Text('(opsional)',
-                                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                    Text(isTransfer ? 'Dari Rekening' : 'Rekening',
+                                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                    if (!isTransfer) ...[
+                                      const SizedBox(width: 6),
+                                      const Text('(opsional)',
+                                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                    ],
                                   ]),
                                   const SizedBox(height: 8),
                                   SingleChildScrollView(
                                     scrollDirection: Axis.horizontal,
                                     child: Row(
                                       children: [
-                                        // No account option
-                                        GestureDetector(
-                                          onTap: () => setState(() => _selectedAccountId = null),
-                                          child: AnimatedContainer(
-                                            duration: const Duration(milliseconds: 200),
-                                            margin: const EdgeInsets.only(right: 8),
-                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: _selectedAccountId == null
-                                                  ? AppColors.primary.withOpacity(0.12)
-                                                  : Colors.white,
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(
+                                        if (!isTransfer)
+                                          GestureDetector(
+                                            onTap: () => setState(() => _selectedAccountId = null),
+                                            child: AnimatedContainer(
+                                              duration: const Duration(milliseconds: 200),
+                                              margin: const EdgeInsets.only(right: 8),
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                              decoration: BoxDecoration(
                                                 color: _selectedAccountId == null
-                                                    ? AppColors.primary : AppColors.divider,
-                                                width: _selectedAccountId == null ? 2 : 1,
-                                              ),
-                                            ),
-                                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                              Icon(Icons.money_off_rounded,
+                                                    ? AppColors.primary.withOpacity(0.12)
+                                                    : Colors.white,
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
                                                   color: _selectedAccountId == null
-                                                      ? AppColors.primary : AppColors.textHint,
-                                                  size: 18),
-                                              const SizedBox(width: 6),
-                                              Text('Tidak ada',
-                                                  style: TextStyle(
-                                                      fontSize: 13, fontWeight: FontWeight.w600,
-                                                      color: _selectedAccountId == null
-                                                          ? AppColors.primary : AppColors.textPrimary)),
-                                            ]),
+                                                      ? AppColors.primary : AppColors.divider,
+                                                  width: _selectedAccountId == null ? 2 : 1,
+                                                ),
+                                              ),
+                                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                                Icon(Icons.money_off_rounded,
+                                                    color: _selectedAccountId == null
+                                                        ? AppColors.primary : AppColors.textHint,
+                                                    size: 18),
+                                                const SizedBox(width: 6),
+                                                Text('Tidak ada',
+                                                    style: TextStyle(
+                                                        fontSize: 13, fontWeight: FontWeight.w600,
+                                                        color: _selectedAccountId == null
+                                                            ? AppColors.primary : AppColors.textPrimary)),
+                                              ]),
+                                            ),
                                           ),
-                                        ),
                                         ...accP.accounts.map((acc) {
                                           final selected = _selectedAccountId == acc.id;
                                           final accColor = acc.parsedColor;
@@ -395,7 +428,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                                       ],
                                     ),
                                   ),
-                                  if (_selectedAccountId != null) ...[
+                                  if (_selectedAccountId != null && !isTransfer) ...[
                                     const SizedBox(height: 6),
                                     Text(
                                       _type == 'expense'
@@ -407,6 +440,68 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
+                                  ],
+
+                                  // To Account (transfer only)
+                                  if (isTransfer) ...[
+                                    const SizedBox(height: 16),
+                                    const Text('Ke Rekening',
+                                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                    const SizedBox(height: 8),
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        children: accP.accounts
+                                            .where((a) => a.id != _selectedAccountId)
+                                            .map((acc) {
+                                          final selected = _selectedToAccountId == acc.id;
+                                          final accColor = acc.parsedColor;
+                                          return GestureDetector(
+                                            onTap: () => setState(() => _selectedToAccountId = acc.id),
+                                            child: AnimatedContainer(
+                                              duration: const Duration(milliseconds: 200),
+                                              margin: const EdgeInsets.only(right: 8),
+                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: selected ? accColor.withOpacity(0.12) : Colors.white,
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: selected ? accColor : AppColors.divider,
+                                                  width: selected ? 2 : 1,
+                                                ),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(mainAxisSize: MainAxisSize.min, children: [
+                                                    Icon(_accountIconData(acc.icon), color: accColor, size: 16),
+                                                    const SizedBox(width: 6),
+                                                    Text(acc.name,
+                                                        style: TextStyle(
+                                                            fontSize: 13, fontWeight: FontWeight.w600,
+                                                            color: selected ? accColor : AppColors.textPrimary)),
+                                                  ]),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    CurrencyFormatter.compact(acc.balance),
+                                                    style: TextStyle(
+                                                        fontSize: 11, color: accColor, fontWeight: FontWeight.w600),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                                    ),
+                                    if (_selectedAccountId != null && _selectedToAccountId != null) ...[
+                                      const SizedBox(height: 6),
+                                      const Text('🔄 Saldo akan dipindahkan antar rekening',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.primary,
+                                              fontWeight: FontWeight.w600)),
+                                    ],
                                   ],
                                 ],
                               );
