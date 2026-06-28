@@ -16,7 +16,11 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@fontsource-variable/dm-sans": "^5.2.8",
     "@fontsource-variable/geist": "^5.2.9",
+    "@fontsource-variable/nunito": "^5.2.7",
+    "@fontsource-variable/playfair-display": "^5.2.8",
+    "@fontsource/orbitron": "^5.2.8",
     "@tailwindcss/vite": "^4.3.1",
     "axios": "^1.18.1",
     "class-variance-authority": "^0.7.1",

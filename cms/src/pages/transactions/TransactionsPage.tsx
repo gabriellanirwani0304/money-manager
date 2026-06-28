@@ -39,6 +39,8 @@ import { Badge } from '@/components/ui/badge'
 import ConfirmDialog from '@/components/shared/ConfirmDialog'
 import PageHeader from '@/components/shared/PageHeader'
 import { TransactionFormFields, defaultTxForm, type TxFormData } from '@/components/shared/TransactionFormFields'
+import { CategoryCombobox } from '@/components/shared/CategoryCombobox'
+import { SearchableSelect } from '@/components/shared/SearchableSelect'
 import { Plus, Pencil, Trash2, Download, Upload, PlusCircle, ArrowLeftRight, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import ImportDialog from './ImportDialog'
 import BulkTransactionDialog from './BulkTransactionDialog'
@@ -361,10 +363,10 @@ export default function TransactionsPage() {
         const totalBalance = accounts.reduce((s, a) => s + a.balance, 0)
         return (
           <div className="mb-5 flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-            {accounts.map(a => {
+            {accounts.map((a, idx) => {
               const active = filterAccount === a.id
               const pos = a.balance >= 0
-              const color = a.color || '#6366f1'
+              const chartVar = `var(--chart-${(idx % 5) + 1})`
               const emoji = typeEmoji[a.type] ?? '💳'
               return (
                 <button
@@ -388,10 +390,10 @@ export default function TransactionsPage() {
                       : 'border-border bg-card hover:border-primary/30 hover:shadow-sm'}`}
                 >
                   {/* colored left bar */}
-                  <div className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full" style={{ backgroundColor: active ? 'hsl(var(--primary))' : color }} />
+                  <div className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full" style={{ backgroundColor: active ? 'var(--primary)' : chartVar }} />
                   <div
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-lg"
-                    style={{ backgroundColor: `${color}22` }}
+                    style={{ background: `color-mix(in oklch, ${chartVar} 18%, transparent)` }}
                   >
                     {emoji}
                   </div>
@@ -439,49 +441,31 @@ export default function TransactionsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={filterCategory} onValueChange={(v) => setFilterCategory(v ?? '')}>
-          <SelectTrigger className="w-44">
-            <SelectValue>
-              {filterCategory
-                ? (() => { const c = categories.find(c => c.id === filterCategory); return c ? `${c.icon} ${c.name}` : 'Semua Kategori' })()
-                : 'Semua Kategori'}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Semua Kategori</SelectItem>
-            {filterType === 'income' || filterType === 'expense'
-              ? categories.filter(c => c.type === filterType).map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
-                ))
-              : <>
-                  <SelectItem value="__income" disabled>— Pemasukan —</SelectItem>
-                  {categories.filter(c => c.type === 'income').map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
-                  ))}
-                  <SelectItem value="__expense" disabled>— Pengeluaran —</SelectItem>
-                  {categories.filter(c => c.type === 'expense').map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
-                  ))}
-                </>
+        <div className="w-48">
+          <CategoryCombobox
+            value={filterCategory}
+            onChange={setFilterCategory}
+            categories={
+              filterType === 'income' || filterType === 'expense'
+                ? categories.filter(c => c.type === filterType)
+                : categories
             }
-          </SelectContent>
-        </Select>
+            allowEmpty
+            emptyLabel="Semua Kategori"
+            placeholder="Semua Kategori"
+          />
+        </div>
 
-        <Select value={filterAccount} onValueChange={(v) => setFilterAccount(v ?? '')}>
-          <SelectTrigger className="w-40">
-            <SelectValue>
-              {filterAccount
-                ? accounts.find(a => a.id === filterAccount)?.name ?? 'Semua Rekening'
-                : 'Semua Rekening'}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Semua Rekening</SelectItem>
-            {accounts.map(a => (
-              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-44">
+          <SearchableSelect
+            value={filterAccount}
+            onChange={setFilterAccount}
+            options={accounts.map(a => ({ value: a.id, label: a.name }))}
+            allowEmpty
+            emptyLabel="Semua Rekening"
+            placeholder="Semua Rekening"
+          />
+        </div>
 
         <DateInput value={filterStart} onChange={setFilterStart} className="w-36" />
         <span className="text-xs text-muted-foreground">s/d</span>

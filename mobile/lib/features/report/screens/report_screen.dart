@@ -20,7 +20,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 4, vsync: this);
     _tabCtrl.addListener(() {
       if (!_tabCtrl.indexIsChanging && _tabCtrl.index == 2) {
         final p = context.read<ReportProvider>();
@@ -74,10 +74,12 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.primary,
+          isScrollable: true,
           tabs: const [
             Tab(text: 'Ringkasan'),
             Tab(text: 'Kategori'),
             Tab(text: 'Mingguan'),
+            Tab(text: 'Komparasi'),
           ],
         ),
       ),
@@ -93,6 +95,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
               _SummaryTab(provider: p),
               _CategoryTab(provider: p),
               _WeeklyTab(provider: p),
+              _CompareTab(provider: p),
             ],
           );
         },
@@ -760,5 +763,317 @@ class _InsightRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ── Komparasi Bulan ────────────────────────────────────────────────────────
+
+class _CompareTab extends StatefulWidget {
+  final ReportProvider provider;
+  const _CompareTab({required this.provider});
+
+  @override
+  State<_CompareTab> createState() => _CompareTabState();
+}
+
+class _CompareTabState extends State<_CompareTab> {
+  static const _monthNames = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
+  ];
+
+  late List<_SlotState> _slots;
+  final List<MonthlySummary?> _results = [];
+  bool _loading = false;
+  static const _colors = [AppColors.primary, AppColors.income, AppColors.expense];
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _slots = [
+      _SlotState(month: now.month, year: now.year),
+      _SlotState(
+        month: now.month == 1 ? 12 : now.month - 1,
+        year: now.month == 1 ? now.year - 1 : now.year,
+      ),
+    ];
+  }
+
+  Future<void> _fetch() async {
+    setState(() { _loading = true; _results.clear(); });
+    final futures = _slots.map((s) => widget.provider.fetchSummary(s.month, s.year));
+    final list = await Future.wait(futures);
+    if (mounted) setState(() { _results.addAll(list); _loading = false; });
+  }
+
+  String _label(_SlotState s) => '${_monthNames[s.month]} ${s.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final years = List.generate(5, (i) => now.year - i);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Slot pickers
+          ...List.generate(_slots.length, (i) {
+            final s = _slots[i];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(children: [
+                Container(
+                  width: 12, height: 12,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(color: _colors[i], shape: BoxShape.circle),
+                ),
+                Text('Bulan ${i + 1}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButton<int>(
+                    value: s.month,
+                    isExpanded: true,
+                    isDense: true,
+                    items: List.generate(12, (mi) => DropdownMenuItem(
+                      value: mi + 1,
+                      child: Text(_monthNames[mi + 1], style: const TextStyle(fontSize: 13)),
+                    )),
+                    onChanged: (v) => setState(() => s.month = v ?? s.month),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButton<int>(
+                    value: s.year,
+                    isExpanded: true,
+                    isDense: true,
+                    items: years.map((y) => DropdownMenuItem(
+                      value: y,
+                      child: Text('$y', style: const TextStyle(fontSize: 13)),
+                    )).toList(),
+                    onChanged: (v) => setState(() => s.year = v ?? s.year),
+                  ),
+                ),
+                if (_slots.length > 2)
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    onPressed: () => setState(() => _slots.removeAt(i)),
+                    visualDensity: VisualDensity.compact,
+                    color: AppColors.expense,
+                  ),
+              ]),
+            );
+          }),
+
+          Row(children: [
+            if (_slots.length < 3)
+              TextButton.icon(
+                onPressed: () {
+                  final last = _slots.last;
+                  setState(() => _slots.add(_SlotState(
+                    month: last.month == 1 ? 12 : last.month - 1,
+                    year: last.month == 1 ? last.year - 1 : last.year,
+                  )));
+                },
+                icon: const Icon(Icons.add_rounded, size: 16),
+                label: const Text('Tambah bulan', style: TextStyle(fontSize: 13)),
+              ),
+            const Spacer(),
+            ElevatedButton(
+              onPressed: _loading ? null : _fetch,
+              child: _loading
+                  ? const SizedBox(width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Bandingkan'),
+            ),
+          ]),
+
+          if (_results.isNotEmpty && _results.length == _slots.length) ...[
+            const SizedBox(height: 20),
+            const Text('Perbandingan',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            const SizedBox(height: 12),
+
+            // Bar chart
+            SizedBox(
+              height: 200,
+              child: _CompareChart(results: _results, labels: _slots.map(_label).toList()),
+            ),
+            const SizedBox(height: 16),
+
+            // Table
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.divider),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                children: [
+                  // Header
+                  _TableRow(
+                    cells: ['Metrik', ..._slots.map(_label)],
+                    isHeader: true,
+                  ),
+                  const Divider(height: 1),
+                  for (final metric in [
+                    ('Pemasukan', (MonthlySummary s) => s.income, true),
+                    ('Pengeluaran', (MonthlySummary s) => s.expense, false),
+                    ('Selisih', (MonthlySummary s) => s.balance, true),
+                    ('Transaksi', (MonthlySummary s) => s.transactionCount.toDouble(), null),
+                    ('Rata-rata/Hari', (MonthlySummary s) => s.avgDailyExpense, false),
+                  ]) ...[
+                    _MetricRow(
+                      label: metric.$1,
+                      values: _results.map((r) => r == null ? null : metric.$2(r)).toList(),
+                      higherIsBetter: metric.$3,
+                      isCount: metric.$3 == null,
+                    ),
+                    const Divider(height: 1),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SlotState {
+  int month;
+  int year;
+  _SlotState({required this.month, required this.year});
+}
+
+class _TableRow extends StatelessWidget {
+  final List<String> cells;
+  final bool isHeader;
+  const _TableRow({required this.cells, this.isHeader = false});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    child: Row(
+      children: cells.asMap().entries.map((e) => Expanded(
+        child: Text(
+          e.value,
+          textAlign: e.key == 0 ? TextAlign.left : TextAlign.right,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isHeader ? FontWeight.w700 : FontWeight.normal,
+            color: isHeader ? AppColors.textPrimary : AppColors.textSecondary,
+          ),
+        ),
+      )).toList(),
+    ),
+  );
+}
+
+class _MetricRow extends StatelessWidget {
+  final String label;
+  final List<double?> values;
+  final bool? higherIsBetter; // null = no highlight
+  final bool isCount;
+
+  const _MetricRow({
+    required this.label,
+    required this.values,
+    this.higherIsBetter,
+    this.isCount = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final nonNull = values.whereType<double>().toList();
+    int? bestIdx;
+    if (higherIsBetter != null && nonNull.isNotEmpty) {
+      final best = higherIsBetter! ? nonNull.reduce((a, b) => a > b ? a : b)
+          : nonNull.reduce((a, b) => a < b ? a : b);
+      bestIdx = values.indexWhere((v) => v == best);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+          ...values.asMap().entries.map((e) {
+            final v = e.value;
+            final isBest = e.key == bestIdx;
+            final text = v == null ? '—' : isCount
+                ? v.toInt().toString()
+                : CurrencyFormatter.compact(v);
+            return Expanded(child: Text(
+              isBest ? '✓ $text' : text,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isBest ? FontWeight.w700 : FontWeight.normal,
+                color: isBest ? AppColors.income : AppColors.textPrimary,
+              ),
+            ));
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompareChart extends StatelessWidget {
+  final List<MonthlySummary?> results;
+  final List<String> labels;
+  const _CompareChart({required this.results, required this.labels});
+
+  static const _colors = [AppColors.primary, AppColors.income, AppColors.expense];
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = ['Pemasukan', 'Pengeluaran', 'Selisih'];
+    final groups = List.generate(metrics.length, (mi) {
+      return BarChartGroupData(
+        x: mi,
+        barRods: List.generate(results.length, (ri) {
+          final r = results[ri];
+          double value = 0;
+          if (r != null) {
+            if (mi == 0) value = r.income;
+            if (mi == 1) value = r.expense;
+            if (mi == 2) value = r.balance;
+          }
+          return BarChartRodData(
+            toY: value,
+            color: _colors[ri % _colors.length],
+            width: 10,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+          );
+        }),
+        barsSpace: 4,
+      );
+    });
+
+    return BarChart(BarChartData(
+      alignment: BarChartAlignment.spaceAround,
+      barGroups: groups,
+      gridData: const FlGridData(show: false),
+      borderData: FlBorderData(show: false),
+      titlesData: FlTitlesData(
+        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        bottomTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            getTitlesWidget: (v, _) => Text(
+              metrics[v.toInt()],
+              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            ),
+          ),
+        ),
+      ),
+    ));
   }
 }

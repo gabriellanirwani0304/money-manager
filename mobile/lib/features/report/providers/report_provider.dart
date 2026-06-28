@@ -75,6 +75,16 @@ class ReportProvider extends ChangeNotifier {
     }
   }
 
+  Future<MonthlySummary?> fetchSummary(int month, int year) async {
+    try {
+      final res = await dio.get(ApiConstants.reportSummary,
+          queryParameters: {'month': month, 'year': year});
+      return MonthlySummary.fromJson(res.data['data'] as Map<String, dynamic>);
+    } on DioException {
+      return null;
+    }
+  }
+
   Future<void> loadWeekly({int? month, int? year}) async {
     final m = month ?? _month;
     final y = year ?? _year;

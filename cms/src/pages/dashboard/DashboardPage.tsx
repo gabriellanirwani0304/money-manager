@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useTheme } from '@/context/ThemeContext'
 import { getDashboard, getCategoryBreakdown, getMonthlyTrend, getMonthlySummary } from '@/api/reports'
 import { listAccounts, type Account } from '@/api/accounts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,15 +31,20 @@ interface CategoryBreakdown { category: CategoryInfo; amount: number; percentage
 interface TrendItem { month: string; income: number; expense: number }
 interface Summary { income: number; expense: number; balance: number; transaction_count: number; avg_daily_expense: number }
 
-const COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316']
-const CAT_TREND_COLORS = [
-  '#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6',
-  '#ec4899','#14b8a6','#f97316','#84cc16','#0ea5e9',
-  '#a855f7','#d946ef','#06b6d4','#78716c','#64748b',
-]
 const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   bank: 'Bank', cash: 'Tunai', ewallet: 'Dompet Digital', investment: 'Investasi', other: 'Lainnya',
+}
+const MATERIAL_ICON_EMOJI: Record<string, string> = {
+  account_balance: '🏦', account_balance_wallet: '👛', savings: '💰',
+  credit_card: '💳', wallet: '👜', payment: '💸', attach_money: '💵',
+  monetization_on: '🪙', business: '🏢', home: '🏠', store: '🏪',
+  local_atm: '🏧', currency_exchange: '💱', trending_up: '📈',
+}
+function resolveIcon(icon: string): string {
+  if (!icon) return '🏦'
+  if (icon.runes !== undefined || [...icon].some(c => c.codePointAt(0)! > 127)) return icon
+  return MATERIAL_ICON_EMOJI[icon] ?? '🏦'
 }
 
 function formatRupiah(n: number) {
@@ -61,6 +67,15 @@ export default function DashboardPage() {
   const now = new Date()
   const month = now.getMonth() + 1
   const year = now.getFullYear()
+
+  const { theme } = useTheme()
+  const getCssVar = useCallback((name: string) =>
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  , [])
+  const chartColors = useMemo(() => [1,2,3,4,5].map(n => getCssVar(`--chart-${n}`)), [theme, getCssVar])
+  const incomeColor  = useMemo(() => getCssVar('--color-green-500') || '#10b981', [theme, getCssVar])
+  const expenseColor = useMemo(() => getCssVar('--color-red-500')   || '#ef4444', [theme, getCssVar])
+  const compareColors = useMemo(() => chartColors.slice(0, 3), [chartColors])
 
   // — Main data —
   const [data, setData] = useState<DashboardData | null>(null)
@@ -160,7 +175,6 @@ export default function DashboardPage() {
   ])
   const [compareData, setCompareData] = useState<(Summary | null)[]>([])
   const [compareLoading, setCompareLoading] = useState(false)
-  const COMPARE_COLORS = ['#6366f1', '#f59e0b', '#10b981']
   const years = [year - 1, year, year + 1]
 
   useEffect(() => {
@@ -232,86 +246,100 @@ export default function DashboardPage() {
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Saldo</CardTitle>
-            <Wallet size={16} className="text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-7 w-28" /> : (
-              <p className="text-xl font-bold">{formatRupiah(totalBalance)}</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pemasukan</CardTitle>
-            <TrendingUp size={16} className="text-green-500" />
-          </CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-7 w-28" /> : (
-              <p className="text-xl font-bold text-green-600">{data ? formatRupiah(data.income) : '-'}</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Pengeluaran</CardTitle>
-            <TrendingDown size={16} className="text-red-500" />
-          </CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-7 w-28" /> : (
-              <p className="text-xl font-bold text-red-600">{data ? formatRupiah(data.expense) : '-'}</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Selisih Bersih</CardTitle>
-            <ArrowLeftRight size={16} className="text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-7 w-28" /> : (
-              <p className={`text-xl font-bold ${netMonth != null && netMonth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {netMonth != null ? formatRupiah(netMonth) : '-'}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {[
+          { label: 'Total Saldo', value: totalBalance, color: 'text-foreground', bg: 'bg-indigo-100 dark:bg-indigo-950', icon: <Wallet size={18} className="text-indigo-600 dark:text-indigo-400" />, border: 'border-l-4 border-l-indigo-400' },
+          { label: 'Pemasukan', value: data?.income ?? null, color: 'text-green-600', bg: 'bg-green-100 dark:bg-green-950', icon: <TrendingUp size={18} className="text-green-600" />, border: 'border-l-4 border-l-green-400' },
+          { label: 'Pengeluaran', value: data?.expense ?? null, color: 'text-red-600', bg: 'bg-red-100 dark:bg-red-950', icon: <TrendingDown size={18} className="text-red-600" />, border: 'border-l-4 border-l-red-400' },
+          { label: 'Selisih Bersih', value: netMonth, color: netMonth != null && netMonth >= 0 ? 'text-green-600' : 'text-red-600', bg: 'bg-slate-100 dark:bg-slate-900', icon: <ArrowLeftRight size={18} className="text-slate-500" />, border: 'border-l-4 border-l-slate-400' },
+        ].map(({ label, value, color, bg, icon, border }) => (
+          <Card key={label} className={border}>
+            <CardContent className="pt-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">{label}</p>
+                  {loading ? <Skeleton className="h-7 w-28" /> : (
+                    <p className={`text-xl font-bold ${color}`}>{value != null ? formatRupiah(value) : '-'}</p>
+                  )}
+                </div>
+                <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center shrink-0`}>{icon}</div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Row 2: Recent transactions + Account balances + Savings rate */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
+      {/* Budget alert — full width when present */}
+      {!loading && budgetAlerts.length > 0 && (
+        <Card className="border-yellow-300 dark:border-yellow-700 border-l-4 border-l-yellow-400">
+          <CardHeader className="flex flex-row items-center gap-2 pb-3">
+            <AlertTriangle size={15} className="text-yellow-500 shrink-0" />
+            <CardTitle className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">Peringatan Anggaran</CardTitle>
+            <Link to="/budgets" className="ml-auto flex items-center gap-1 text-xs text-primary hover:underline">
+              Kelola <ArrowRight size={12} />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {budgetAlerts.map((alert) => (
+                <div key={alert.category_name} className="rounded-lg bg-yellow-50 dark:bg-yellow-950/30 p-3">
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="font-semibold">{alert.category_name}</span>
+                    <span className={alert.percentage >= 100 ? 'text-red-500 font-bold' : 'text-yellow-600'}>
+                      {Math.round(alert.percentage)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-yellow-200 dark:bg-yellow-900 overflow-hidden">
+                    <div className={`h-full rounded-full ${alert.percentage >= 100 ? 'bg-red-500' : 'bg-yellow-400'}`}
+                      style={{ width: `${Math.min(alert.percentage, 100)}%` }} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {formatRupiah(alert.spent)} / {formatRupiah(alert.budget_amount)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Row 2: Recent transactions + Accounts + Savings */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Transaksi Terakhir */}
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-sm font-semibold">Transaksi Terakhir</CardTitle>
             <Link to="/transactions" className="flex items-center gap-1 text-xs text-primary hover:underline">
               Lihat semua <ArrowRight size={12} />
             </Link>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-1">
             {loading ? (
-              [1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)
+              [1,2,3,4,5].map(i => <Skeleton key={i} className="h-10 w-full" />)
             ) : recentTxs.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Belum ada transaksi</p>
-            ) : recentTxs.slice(0, 5).map((tx) => (
-              <div key={tx.id} className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base shrink-0">{tx.category?.icon ?? '💸'}</span>
+              <p className="text-sm text-muted-foreground text-center py-8">Belum ada transaksi</p>
+            ) : recentTxs.slice(0, 6).map((tx) => (
+              <div key={tx.id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 hover:bg-muted/40 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm ${
+                    tx.type === 'income' ? 'bg-green-100 dark:bg-green-950' : tx.type === 'transfer' ? 'bg-blue-100 dark:bg-blue-950' : 'bg-red-100 dark:bg-red-950'
+                  }`}>
+                    {tx.category?.icon ? resolveIcon(tx.category.icon) : (tx.type === 'transfer' ? '🔄' : tx.type === 'income' ? '📈' : '📉')}
+                  </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">{tx.description || tx.category?.name}</p>
+                    <p className="text-xs font-medium truncate">{tx.description || tx.category?.name || '—'}</p>
                     <p className="text-[10px] text-muted-foreground">{tx.date}</p>
                   </div>
                 </div>
-                <span className={`text-xs font-semibold shrink-0 ${tx.type === 'income' ? 'text-green-600' : 'text-red-500'}`}>
-                  {tx.type === 'income' ? '+' : '-'}{formatRupiah(tx.amount)}
+                <span className={`text-xs font-bold shrink-0 tabular-nums ${tx.type === 'income' ? 'text-green-600' : tx.type === 'transfer' ? 'text-blue-500' : 'text-red-500'}`}>
+                  {tx.type === 'income' ? '+' : tx.type === 'transfer' ? '⇄' : '-'}{formatRupiah(tx.amount)}
                 </span>
               </div>
             ))}
           </CardContent>
         </Card>
 
-        <div className="lg:col-span-1 space-y-4">
+        {/* Accounts + Savings */}
+        <div className="space-y-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-sm font-semibold">Saldo Rekening</CardTitle>
@@ -321,72 +349,45 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {loading ? (
-                [1,2].map(i => <Skeleton key={i} className="h-8 w-full" />)
+                [1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)
               ) : accounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-2">Belum ada rekening</p>
+                <p className="text-sm text-muted-foreground text-center py-4">Belum ada rekening</p>
               ) : accounts.map((acc) => (
-                <div key={acc.id} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{acc.icon}</span>
+                <div key={acc.id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 hover:bg-muted/40 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-sm shrink-0">
+                      {resolveIcon(acc.icon)}
+                    </div>
                     <div>
-                      <p className="text-xs font-medium">{acc.name}</p>
+                      <p className="text-xs font-semibold">{acc.name}</p>
                       <p className="text-[10px] text-muted-foreground">{ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}</p>
                     </div>
                   </div>
-                  <span className="text-xs font-semibold tabular-nums">{formatRupiah(acc.balance)}</span>
+                  <span className="text-sm font-bold tabular-nums">{formatRupiah(acc.balance)}</span>
                 </div>
               ))}
             </CardContent>
           </Card>
 
           {savingsRate != null && (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold">Tingkat Tabungan Bulan Ini</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className={`text-2xl font-bold ${savingsRate >= 20 ? 'text-green-600' : savingsRate >= 0 ? 'text-yellow-500' : 'text-red-500'}`}>
-                  {savingsRate}%
-                </p>
-                <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div className={`h-full rounded-full ${savingsRate >= 20 ? 'bg-green-500' : savingsRate >= 0 ? 'bg-yellow-400' : 'bg-red-500'}`}
+            <Card className={`border-l-4 ${savingsRate >= 20 ? 'border-l-green-400' : savingsRate >= 0 ? 'border-l-yellow-400' : 'border-l-red-400'}`}>
+              <CardContent className="pt-5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold">Tingkat Tabungan</p>
+                  <p className="text-xs text-muted-foreground">{monthNames[month - 1]} {year}</p>
+                </div>
+                <div className="flex items-end gap-3">
+                  <p className={`text-3xl font-bold ${savingsRate >= 20 ? 'text-green-600' : savingsRate >= 0 ? 'text-yellow-500' : 'text-red-500'}`}>
+                    {savingsRate}%
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {savingsRate >= 20 ? '✅ Bagus!' : savingsRate >= 10 ? '⚠️ Bisa lebih baik' : savingsRate >= 0 ? '⚠️ Perlu dikurangi' : '❌ Pengeluaran melebihi pemasukan'}
+                  </p>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${savingsRate >= 20 ? 'bg-green-500' : savingsRate >= 0 ? 'bg-yellow-400' : 'bg-red-500'}`}
                     style={{ width: `${Math.min(Math.max(savingsRate, 0), 100)}%` }} />
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <div className="lg:col-span-1">
-          {budgetAlerts.length > 0 && (
-            <Card className="border-yellow-300 dark:border-yellow-700">
-              <CardHeader className="flex flex-row items-center gap-2 pb-3">
-                <AlertTriangle size={16} className="text-yellow-500" />
-                <CardTitle className="text-sm font-semibold text-yellow-600 dark:text-yellow-400">
-                  Peringatan Anggaran
-                </CardTitle>
-                <Link to="/budgets" className="ml-auto flex items-center gap-1 text-xs text-primary hover:underline">
-                  Kelola <ArrowRight size={12} />
-                </Link>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {budgetAlerts.map((alert) => (
-                  <div key={alert.category_name}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="font-medium">{alert.category_name}</span>
-                      <span className={alert.percentage >= 100 ? 'text-red-500 font-semibold' : 'text-yellow-600'}>
-                        {formatRupiah(alert.spent)} / {formatRupiah(alert.budget_amount)}
-                        {' '}({Math.round(alert.percentage)}%)
-                      </span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${alert.percentage >= 100 ? 'bg-red-500' : 'bg-yellow-400'}`}
-                        style={{ width: `${Math.min(alert.percentage, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
               </CardContent>
             </Card>
           )}
@@ -410,8 +411,8 @@ export default function DashboardPage() {
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tickFormatter={formatShort} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
                   <Tooltip formatter={(v) => formatRupiah(Number(v))} contentStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Pemasukan" fill="#10b981" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Pengeluaran" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Pemasukan" fill={incomeColor} radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Pengeluaran" fill={expenseColor} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -433,7 +434,7 @@ export default function DashboardPage() {
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie data={pieData} cx="40%" cy="50%" innerRadius={52} outerRadius={80} dataKey="value" paddingAngle={2}>
-                    {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    {pieData.map((_, i) => <Cell key={i} fill={chartColors[i % chartColors.length]} />)}
                   </Pie>
                   <Tooltip
                     formatter={(v, _n, p) => [`${formatRupiah(Number(v))} (${p.payload.pct}%)`, p.payload.name]}
@@ -505,7 +506,7 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap gap-2">
                     {allTrendCategories.map((cat, idx) => {
                       const checked = selectedCatIds.has(cat.id)
-                      const color = CAT_TREND_COLORS[idx % CAT_TREND_COLORS.length]
+                      const color = chartColors[idx % chartColors.length]
                       return (
                         <button
                           key={cat.id}
@@ -543,7 +544,7 @@ export default function DashboardPage() {
                           const idx = allTrendCategories.findIndex((c) => c.id === cat.id)
                           return (
                             <Line key={cat.id} type="monotone" dataKey={cat.id} name={cat.name}
-                              stroke={CAT_TREND_COLORS[idx % CAT_TREND_COLORS.length]}
+                              stroke={chartColors[idx % chartColors.length]}
                               strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                           )
                         })}
@@ -565,7 +566,7 @@ export default function DashboardPage() {
                         <tbody>
                           {activeCategories.map((cat) => {
                             const idx = allTrendCategories.findIndex((c) => c.id === cat.id)
-                            const color = CAT_TREND_COLORS[idx % CAT_TREND_COLORS.length]
+                            const color = chartColors[idx % chartColors.length]
                             const vals = categoryTrendMonths.map((_, mi) => {
                               const entry = categoryTrendChartData[mi]
                               return entry ? (entry[cat.id] as number ?? 0) : 0
@@ -631,7 +632,7 @@ export default function DashboardPage() {
               {compareSlots.map((slot, i) => (
                 <div key={i} className="flex items-end gap-1.5">
                   <div className="flex items-center gap-1">
-                    <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COMPARE_COLORS[i] }} />
+                    <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: compareColors[i] }} />
                     <span className="text-xs text-muted-foreground font-medium w-14">Bulan {i + 1}</span>
                   </div>
                   <Select value={String(slot.month)} onValueChange={(v) => updateSlot(i, 'month', Number(v))}>
@@ -671,7 +672,7 @@ export default function DashboardPage() {
                     <Tooltip formatter={(v) => formatRupiah(Number(v))} contentStyle={{ fontSize: 12 }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     {compareLabels.map((label, i) => (
-                      <Bar key={label} dataKey={label} fill={COMPARE_COLORS[i]} radius={[3, 3, 0, 0]} />
+                      <Bar key={label} dataKey={label} fill={compareColors[i]} radius={[3, 3, 0, 0]} />
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
@@ -684,7 +685,7 @@ export default function DashboardPage() {
                         {compareLabels.map((label, i) => (
                           <th key={i} className="px-4 py-2.5 text-right text-xs font-medium">
                             <span className="flex items-center justify-end gap-1.5">
-                              <span className="inline-block w-2 h-2 rounded-full" style={{ background: COMPARE_COLORS[i] }} />
+                              <span className="inline-block w-2 h-2 rounded-full" style={{ background: compareColors[i] }} />
                               {label}
                             </span>
                           </th>

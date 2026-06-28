@@ -103,7 +103,7 @@ class _CategoryScreenState extends State<CategoryScreen>
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Hapus Kategori'),
-        content: Text('Hapus kategori "${c.name}"? Tidak bisa dilakukan jika masih ada transaksi.'),
+        content: Text('Hapus kategori "${c.name}"?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Batal')),
           ElevatedButton(
@@ -114,17 +114,152 @@ class _CategoryScreenState extends State<CategoryScreen>
         ],
       ),
     );
-    if (ok == true && context.mounted) {
-      final p = context.read<CategoryProvider>();
-      final success = await p.delete(c.id);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(success ? 'Kategori dihapus' : (p.error ?? 'Gagal menghapus')),
-            backgroundColor: success ? AppColors.income : AppColors.expense,
+    if (ok != true || !context.mounted) return;
+
+    final p = context.read<CategoryProvider>();
+    final result = await p.delete(c.id);
+
+    if (!context.mounted) return;
+
+    if (result == DeleteResult.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kategori dihapus'), backgroundColor: AppColors.income),
+      );
+    } else if (result == DeleteResult.conflict) {
+      _showReassignDialog(context, c);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(p.error ?? 'Gagal menghapus'),
+          backgroundColor: AppColors.expense,
+        ),
+      );
+    }
+  }
+
+  void _showReassignDialog(BuildContext context, CategoryModel c) async {
+    final p = context.read<CategoryProvider>();
+    final others = p.categories.where((x) => x.id != c.id && x.type == c.type).toList();
+
+    if (others.isEmpty) {
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Tidak Bisa Dihapus'),
+          content: Text(
+            'Kategori "${c.name}" masih memiliki transaksi, '
+            'tapi tidak ada kategori ${c.type == 'expense' ? 'pengeluaran' : 'pemasukan'} '
+            'lain untuk memindahkannya.\n\nTambah kategori lain terlebih dahulu.',
           ),
-        );
-      }
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Mengerti')),
+          ],
+        ),
+      );
+      return;
+    }
+
+    CategoryModel? selected = others.first;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Pindahkan Transaksi'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Kategori "${c.name}" masih memiliki transaksi. '
+                'Pilih kategori tujuan sebelum menghapus:',
+                style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              ...others.map((cat) {
+                Color catColor;
+                try {
+                  catColor = Color(int.parse(cat.color.replaceFirst('#', '0xFF')));
+                } catch (_) {
+                  catColor = AppColors.primary;
+                }
+                final isSelected = selected?.id == cat.id;
+                return InkWell(
+                  onTap: () => setState(() => selected = cat),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                          size: 20,
+                          color: isSelected ? AppColors.primary : AppColors.textHint,
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: catColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Center(
+                            child: _isEmoji(cat.icon)
+                                ? Text(cat.icon, style: const TextStyle(fontSize: 14))
+                                : Icon(Icons.category_outlined, size: 14, color: catColor),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(cat.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: selected == null ? null : () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.expense),
+              child: const Text('Pindahkan & Hapus', style: TextStyle(color: Colors.white, fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || selected == null || !context.mounted) return;
+
+    // Show loading while reassigning
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            CircularProgressIndicator(color: AppColors.primary),
+            SizedBox(width: 16),
+            Text('Memindahkan transaksi...'),
+          ],
+        ),
+      ),
+    );
+
+    final ok = await p.reassignAndDelete(c.id, selected!.id);
+
+    if (context.mounted) {
+      Navigator.pop(context); // close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'Transaksi dipindahkan & kategori dihapus'
+              : (p.error ?? 'Gagal memindahkan transaksi')),
+          backgroundColor: ok ? AppColors.income : AppColors.expense,
+        ),
+      );
     }
   }
 }
@@ -186,7 +321,7 @@ class _CategoryList extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: catColor.withOpacity(0.12),
+                    color: catColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
@@ -402,7 +537,7 @@ class _CategoryFormState extends State<_CategoryForm> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: _parsedColor.withOpacity(0.12),
+                  color: _parsedColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: _parsedColor, width: 2),
                 ),
@@ -433,7 +568,7 @@ class _CategoryFormState extends State<_CategoryForm> {
                     onTap: () => setState(() => _icon = e),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: sel ? _parsedColor.withOpacity(0.2) : Colors.transparent,
+                        color: sel ? _parsedColor.withValues(alpha: 0.2) : Colors.transparent,
                         borderRadius: BorderRadius.circular(6),
                         border: sel ? Border.all(color: _parsedColor) : null,
                       ),
@@ -505,7 +640,7 @@ class _TypeBtn extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: selected ? AppColors.primary.withOpacity(0.1) : null,
+        backgroundColor: selected ? AppColors.primary.withValues(alpha: 0.1) : null,
         side: BorderSide(color: selected ? AppColors.primary : AppColors.divider),
       ),
       child: Text(label, style: TextStyle(

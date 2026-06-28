@@ -4,6 +4,7 @@ import { listCategories, type Category } from '@/api/categories'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { CategoryCombobox } from '@/components/shared/CategoryCombobox'
 import {
   Select,
   SelectContent,
@@ -250,21 +251,12 @@ export default function BudgetsPage() {
           <div className="space-y-3">
             <div className="space-y-1">
               <Label>Kategori</Label>
-              <Select
-                value={form.category_id}
-                onValueChange={(v) => setForm((f) => ({ ...f, category_id: v ?? undefined }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.icon} {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CategoryCombobox
+                value={form.category_id ?? ''}
+                onChange={(id) => setForm((f) => ({ ...f, category_id: id }))}
+                categories={categories}
+                placeholder="Pilih kategori"
+              />
             </div>
             <div className="space-y-1">
               <Label>Jumlah (Rp)</Label>

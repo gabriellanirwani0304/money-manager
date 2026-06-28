@@ -12,6 +12,8 @@ import {
   CalendarDays,
   LogOut,
 } from 'lucide-react'
+import { useTheme } from '@/context/ThemeContext'
+import { THEMES } from '@/lib/themes'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -26,6 +28,7 @@ const navItems = [
 export default function Sidebar() {
   const { logout } = useAuth()
   const navigate = useNavigate()
+  const { theme, setTheme } = useTheme()
 
   const handleLogout = async () => {
     await logout()
@@ -59,6 +62,28 @@ export default function Sidebar() {
         ))}
       </nav>
       <Separator className="my-3" />
+      <div className="px-2 mb-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Tema</p>
+        <div className="flex gap-2 flex-wrap">
+          {THEMES.map(t => (
+            <button
+              key={t.id}
+              title={`${t.emoji} ${t.label}`}
+              onClick={() => setTheme(t.id)}
+              className={`w-6 h-6 rounded-full transition-all hover:scale-110 ${
+                theme === t.id
+                  ? 'ring-2 ring-offset-2 ring-foreground scale-110'
+                  : 'opacity-70 hover:opacity-100'
+              }`}
+              style={{ background: t.preview }}
+            />
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5">
+          {THEMES.find(t => t.id === theme)?.emoji} {THEMES.find(t => t.id === theme)?.label}
+        </p>
+      </div>
+      <Separator className="mb-3" />
       <Button variant="ghost" size="sm" className="justify-start gap-2" onClick={handleLogout}>
         <LogOut size={16} />
         Keluar

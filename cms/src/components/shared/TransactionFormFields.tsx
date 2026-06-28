@@ -2,6 +2,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import DateInput from '@/components/shared/DateInput'
+import { CategoryCombobox } from '@/components/shared/CategoryCombobox'
+import { SearchableSelect } from '@/components/shared/SearchableSelect'
 import { PlusCircle } from 'lucide-react'
 import type { Category } from '@/api/categories'
 import type { Account } from '@/api/accounts'
@@ -85,58 +87,38 @@ export function TransactionFormFields({ value, onChange, categories, accounts, o
               </button>
             )}
           </div>
-          <Select value={value.category_id} onValueChange={(v) => set({ category_id: v ?? '' })}>
-            <SelectTrigger>
-              <SelectValue placeholder="Pilih kategori">
-                {filteredCats.find((c) => c.id === value.category_id)
-                  ? `${filteredCats.find((c) => c.id === value.category_id)?.icon} ${filteredCats.find((c) => c.id === value.category_id)?.name}`
-                  : undefined}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {filteredCats.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CategoryCombobox
+            value={value.category_id}
+            onChange={(id) => set({ category_id: id })}
+            categories={filteredCats}
+            placeholder="Pilih kategori"
+          />
         </div>
       )}
 
       {/* Account */}
       <div className="space-y-1">
         <Label>{isTransfer ? 'Dari Rekening' : 'Rekening (opsional)'}</Label>
-        <Select value={value.account_id} onValueChange={(v) => set({ account_id: v ?? '' })}>
-          <SelectTrigger>
-            <SelectValue>
-              {accounts.find((a) => a.id === value.account_id)?.name
-                ?? (isTransfer ? 'Pilih rekening asal' : '— Tidak ada —')}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {!isTransfer && <SelectItem value="">— Tidak ada —</SelectItem>}
-            {accounts.map((a) => (
-              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          value={value.account_id}
+          onChange={(v) => set({ account_id: v })}
+          options={accounts.map(a => ({ value: a.id, label: a.name }))}
+          placeholder={isTransfer ? 'Pilih rekening asal' : '— Tidak ada —'}
+          allowEmpty={!isTransfer}
+          emptyLabel="— Tidak ada —"
+        />
       </div>
 
       {/* To Account */}
       {isTransfer && (
         <div className="space-y-1">
           <Label>Ke Rekening</Label>
-          <Select value={value.to_account_id} onValueChange={(v) => set({ to_account_id: v ?? '' })}>
-            <SelectTrigger>
-              <SelectValue>
-                {accounts.find((a) => a.id === value.to_account_id)?.name ?? 'Pilih rekening tujuan'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {accounts.filter((a) => a.id !== value.account_id).map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            value={value.to_account_id}
+            onChange={(v) => set({ to_account_id: v })}
+            options={accounts.filter(a => a.id !== value.account_id).map(a => ({ value: a.id, label: a.name }))}
+            placeholder="Pilih rekening tujuan"
+          />
         </div>
       )}
 

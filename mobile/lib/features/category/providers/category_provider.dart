@@ -4,6 +4,8 @@ import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../transaction/models/transaction_models.dart';
 
+enum DeleteResult { success, conflict, error }
+
 class CategoryProvider extends ChangeNotifier {
   List<CategoryModel> _categories = [];
   bool _loading = false;
@@ -77,10 +79,52 @@ class CategoryProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> delete(String id) async {
+  Future<DeleteResult> delete(String id) async {
     try {
       await dio.delete(ApiConstants.categoryById(id));
       _categories.removeWhere((c) => c.id == id);
+      notifyListeners();
+      return DeleteResult.success;
+    } on DioException catch (e) {
+      final apiErr = ApiException.fromDio(e);
+      _error = apiErr.message;
+      notifyListeners();
+      final msg = apiErr.message.toLowerCase();
+      if (msg.contains('transaction') || msg.contains('transaksi') || e.response?.statusCode == 409) {
+        return DeleteResult.conflict;
+      }
+      return DeleteResult.error;
+    }
+  }
+
+  Future<bool> reassignAndDelete(String fromId, String toId) async {
+    try {
+      // Fetch all transactions for this category
+      final res = await dio.get(
+        ApiConstants.transactions,
+        queryParameters: {'category_id': fromId, 'limit': 1000},
+      );
+      final data = res.data['data'];
+      final List<dynamic> txList = data is List
+          ? data
+          : (data['transactions'] as List<dynamic>? ?? []);
+
+      // Reassign each transaction
+      for (final tx in txList) {
+        final txId = tx['id'] as String;
+        await dio.put(ApiConstants.transactionById(txId), data: {
+          'category_id': toId,
+          'amount': tx['amount'],
+          'type': tx['type'],
+          'description': tx['description'] ?? '',
+          'date': tx['date'],
+          if (tx['account_id'] != null) 'account_id': tx['account_id'],
+        });
+      }
+
+      // Now delete the (now empty) category
+      await dio.delete(ApiConstants.categoryById(fromId));
+      _categories.removeWhere((c) => c.id == fromId);
       notifyListeners();
       return true;
     } on DioException catch (e) {

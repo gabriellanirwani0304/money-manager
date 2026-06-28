@@ -31,6 +31,9 @@ dependencies:
   share_plus: ^10.0.0
   path_provider: ^2.1.5
 
+  # File picking (CSV import)
+  file_picker: ^8.1.2
+
   # Icons
   cupertino_icons: ^1.0.8
 

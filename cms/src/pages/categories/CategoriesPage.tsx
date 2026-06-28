@@ -6,6 +6,7 @@ import {
   deleteCategory,
   type Category,
 } from '@/api/categories'
+import { listTransactions, updateTransaction } from '@/api/transactions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -20,6 +21,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
@@ -34,7 +36,7 @@ import { Badge } from '@/components/ui/badge'
 import ConfirmDialog from '@/components/shared/ConfirmDialog'
 import CategoryForm, { type CategoryFormValue } from '@/components/shared/CategoryForm'
 import PageHeader from '@/components/shared/PageHeader'
-import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, ArrowRight, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 const PAGE_SIZE = 10
@@ -60,6 +62,12 @@ export default function CategoriesPage() {
   const [editing, setEditing] = useState<Category | null>(null)
   const [form, setForm] = useState<CategoryFormValue>(emptyForm())
   const [deleteID, setDeleteID] = useState<string | null>(null)
+
+  // Reassign-before-delete state
+  const [reassignFrom, setReassignFrom] = useState<Category | null>(null)
+  const [reassignOptions, setReassignOptions] = useState<Category[]>([])
+  const [reassignTo, setReassignTo] = useState<string>('')
+  const [reassigning, setReassigning] = useState(false)
 
   const [filterType, setFilterType] = useState<string>('')
   const [search, setSearch] = useState<string>('')
@@ -126,13 +134,66 @@ export default function CategoriesPage() {
 
   const handleDelete = async () => {
     if (!deleteID) return
+    const target = items.find(c => c.id === deleteID)
     try {
       await deleteCategory(deleteID)
       toast.success('Kategori dihapus')
       setDeleteID(null)
       load(page)
+    } catch (err: unknown) {
+      const msg: string = (err as { response?: { data?: { error?: string; message?: string } } })
+        ?.response?.data?.error
+        ?? (err as { response?: { data?: { error?: string; message?: string } } })
+        ?.response?.data?.message
+        ?? ''
+      if (msg.toLowerCase().includes('transaction') || msg.toLowerCase().includes('transaksi')) {
+        // Has existing transactions — open reassign dialog
+        setDeleteID(null)
+        if (target) {
+          const res = await listCategories({ type: target.type, limit: 200 })
+          const opts = (res.data.data.categories ?? []).filter(c => c.id !== target.id)
+          setReassignOptions(opts)
+          setReassignTo(opts[0]?.id ?? '')
+          setReassignFrom(target)
+        }
+      } else {
+        toast.error(msg || 'Gagal menghapus kategori')
+      }
+    }
+  }
+
+  const handleReassign = async () => {
+    if (!reassignFrom || !reassignTo) return
+    setReassigning(true)
+    try {
+      // Fetch all transactions for the old category
+      const res = await listTransactions({ category_id: reassignFrom.id, limit: 1000 })
+      const txs = res.data.data.transactions ?? []
+
+      // Reassign each transaction
+      await Promise.all(
+        txs.map(tx =>
+          updateTransaction(tx.id, {
+            category_id: reassignTo,
+            amount: tx.amount,
+            type: tx.type,
+            description: tx.description ?? '',
+            date: tx.date,
+            account_id: tx.account_id,
+          })
+        )
+      )
+
+      // Now delete the category
+      await deleteCategory(reassignFrom.id)
+      toast.success(`${txs.length} transaksi dipindahkan & kategori dihapus`)
+      setReassignFrom(null)
+      setReassignTo('')
+      load(page)
     } catch {
-      toast.error('Gagal menghapus kategori')
+      toast.error('Gagal memindahkan transaksi')
+    } finally {
+      setReassigning(false)
     }
   }
 
@@ -294,6 +355,80 @@ export default function CategoriesPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteID(null)}
       />
+
+      {/* Reassign-before-delete dialog */}
+      <Dialog open={!!reassignFrom} onOpenChange={(o) => { if (!o && !reassigning) { setReassignFrom(null); setReassignTo('') } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pindahkan Transaksi</DialogTitle>
+            <DialogDescription>
+              Kategori <span className="font-semibold text-foreground">"{reassignFrom?.name}"</span> masih memiliki
+              transaksi. Pilih kategori tujuan sebelum menghapus.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* From → To visual */}
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <span className="text-base">{reassignFrom?.icon ?? '📦'}</span>
+                <span className="text-muted-foreground line-through">{reassignFrom?.name}</span>
+              </div>
+              <ArrowRight size={14} className="text-muted-foreground shrink-0" />
+              <div className="text-sm font-medium text-foreground">
+                {reassignOptions.find(c => c.id === reassignTo)?.icon ?? ''}{' '}
+                {reassignOptions.find(c => c.id === reassignTo)?.name ?? '—'}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Kategori Tujuan</label>
+              {reassignOptions.length === 0 ? (
+                <p className="text-sm text-destructive">
+                  Tidak ada kategori {reassignFrom?.type === 'expense' ? 'pengeluaran' : 'pemasukan'} lain.
+                  Tambah kategori terlebih dahulu.
+                </p>
+              ) : (
+                <Select value={reassignTo} onValueChange={v => setReassignTo(v ?? '')}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih kategori..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {reassignOptions.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="flex items-center gap-2">
+                          <span>{c.icon ?? '📦'}</span>
+                          <span>{c.name}</span>
+                          <Badge variant="secondary" className="text-[10px] py-0 h-4 ml-1">
+                            {c.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
+                          </Badge>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setReassignFrom(null); setReassignTo('') }} disabled={reassigning}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReassign}
+              disabled={!reassignTo || reassigning || reassignOptions.length === 0}
+            >
+              {reassigning ? (
+                <><Loader2 size={14} className="mr-2 animate-spin" /> Memindahkan...</>
+              ) : (
+                'Pindahkan & Hapus'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

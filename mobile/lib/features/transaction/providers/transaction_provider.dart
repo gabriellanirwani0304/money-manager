@@ -207,6 +207,26 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
+  // Returns {imported, failed} or throws
+  Future<Map<String, int>> batchCreate(List<Map<String, dynamic>> rows) async {
+    try {
+      final res = await dio.post(
+        '/transactions/batch',
+        data: {'transactions': rows},
+      );
+      final d = res.data['data'] as Map<String, dynamic>? ?? {};
+      await load();
+      return {
+        'imported': d['imported'] as int? ?? 0,
+        'failed': d['failed'] as int? ?? 0,
+      };
+    } on DioException catch (e) {
+      _error = ApiException.fromDio(e).message;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<bool> delete(String id) async {
     try {
       await dio.delete(ApiConstants.transactionById(id));

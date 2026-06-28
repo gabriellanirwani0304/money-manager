@@ -22,6 +22,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
   final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  final _catSearchCtrl = TextEditingController();
 
   String _type = 'expense';
   String? _selectedCategoryId;
@@ -29,6 +30,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
   String? _selectedToAccountId;
   DateTime _selectedDate = DateTime.now();
   bool _submitting = false;
+  String _catSearch = '';
 
   bool get isEditing => widget.existing != null;
   bool get isTransfer => _type == 'transfer';
@@ -44,6 +46,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
         setState(() {
           _type = _types[_tabCtrl.index];
           _selectedCategoryId = null;
+          _catSearch = '';
+          _catSearchCtrl.clear();
         });
         if (!isTransfer) {
           context.read<TransactionProvider>().loadCategories(type: _type);
@@ -76,6 +80,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
     _tabCtrl.dispose();
     _amountCtrl.dispose();
     _descCtrl.dispose();
+    _catSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -274,58 +279,102 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                           if (!isTransfer) ...[
                             const Text('Kategori',
                                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
                             Consumer<TransactionProvider>(
                               builder: (_, p, __) {
-                                final cats = p.categories;
-                                if (cats.isEmpty) {
+                                final allCats = p.categories;
+                                if (allCats.isEmpty) {
                                   return const Center(
                                       child: CircularProgressIndicator(color: AppColors.primary));
                                 }
-                                return Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: cats.map((cat) {
-                                    final selected = _selectedCategoryId == cat.id;
-                                    final catColor = _parseColor(cat.color);
-                                    return GestureDetector(
-                                      onTap: () => setState(() => _selectedCategoryId = cat.id),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(milliseconds: 200),
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: selected
-                                              ? catColor.withOpacity(0.15)
-                                              : Colors.white,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: selected ? catColor : AppColors.divider,
-                                            width: selected ? 2 : 1,
-                                          ),
-                                          boxShadow: selected
-                                              ? [BoxShadow(color: catColor.withOpacity(0.2), blurRadius: 8)]
-                                              : null,
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            CategoryIconWidget(
-                                                icon: cat.icon, color: cat.color, size: 28),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              cat.name,
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                                color: selected ? catColor : AppColors.textPrimary,
+                                final cats = _catSearch.isEmpty
+                                    ? allCats
+                                    : allCats.where((c) =>
+                                        c.name.toLowerCase().contains(_catSearch.toLowerCase())).toList();
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Search field
+                                    TextField(
+                                      controller: _catSearchCtrl,
+                                      onChanged: (v) => setState(() => _catSearch = v),
+                                      decoration: InputDecoration(
+                                        hintText: 'Cari kategori...',
+                                        hintStyle: const TextStyle(fontSize: 13),
+                                        prefixIcon: const Icon(Icons.search_rounded,
+                                            size: 18, color: AppColors.textHint),
+                                        suffixIcon: _catSearch.isNotEmpty
+                                            ? IconButton(
+                                                icon: const Icon(Icons.close_rounded, size: 16),
+                                                onPressed: () => setState(() {
+                                                  _catSearch = '';
+                                                  _catSearchCtrl.clear();
+                                                }),
+                                              )
+                                            : null,
+                                        contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 10),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    if (cats.isEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        child: Text('Tidak ditemukan "$_catSearch"',
+                                            style: const TextStyle(
+                                                color: AppColors.textSecondary, fontSize: 13)),
+                                      )
+                                    else
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: cats.map((cat) {
+                                          final selected = _selectedCategoryId == cat.id;
+                                          final catColor = _parseColor(cat.color);
+                                          return GestureDetector(
+                                            onTap: () => setState(() => _selectedCategoryId = cat.id),
+                                            child: AnimatedContainer(
+                                              duration: const Duration(milliseconds: 180),
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 12, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color: selected
+                                                    ? catColor.withValues(alpha: 0.15)
+                                                    : Colors.white,
+                                                borderRadius: BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: selected ? catColor : AppColors.divider,
+                                                  width: selected ? 2 : 1,
+                                                ),
+                                                boxShadow: selected
+                                                    ? [BoxShadow(
+                                                        color: catColor.withValues(alpha: 0.2),
+                                                        blurRadius: 8)]
+                                                    : null,
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  CategoryIconWidget(
+                                                      icon: cat.icon, color: cat.color, size: 28),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    cat.name,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: selected ? catColor : AppColors.textPrimary,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
-                                          ],
-                                        ),
+                                          );
+                                        }).toList(),
                                       ),
-                                    );
-                                  }).toList(),
+                                  ],
                                 );
                               },
                             ),

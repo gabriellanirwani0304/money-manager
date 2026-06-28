@@ -10,6 +10,9 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../shared/widgets/money_card.dart';
 import 'add_transaction_screen.dart';
 import '../../category/screens/category_screen.dart';
+import '../../calendar/screens/calendar_screen.dart';
+import 'bulk_transaction_screen.dart';
+import 'import_csv_screen.dart';
 
 class TransactionListScreen extends StatefulWidget {
   const TransactionListScreen({super.key});
@@ -75,6 +78,30 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                 context.read<TransactionProvider>().clearFilters();
               }
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.calendar_month_outlined),
+            tooltip: 'Kalender',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CalendarScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.playlist_add_rounded),
+            tooltip: 'Input Massal',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BulkTransactionScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.upload_file_rounded),
+            tooltip: 'Import CSV',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ImportCsvScreen()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.category_outlined),
@@ -590,6 +617,10 @@ class _FilterSheetState extends State<_FilterSheet> {
   String? _accId;
   DateTime? _startDate;
   DateTime? _endDate;
+  String _catSearch = '';
+  String _accSearch = '';
+  final _catSearchCtrl = TextEditingController();
+  final _accSearchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -600,6 +631,13 @@ class _FilterSheetState extends State<_FilterSheet> {
     _accId = p.filterAccountId;
     _startDate = p.filterStartDate != null ? DateTime.tryParse(p.filterStartDate!) : null;
     _endDate = p.filterEndDate != null ? DateTime.tryParse(p.filterEndDate!) : null;
+  }
+
+  @override
+  void dispose() {
+    _catSearchCtrl.dispose();
+    _accSearchCtrl.dispose();
+    super.dispose();
   }
 
   String _fmt(DateTime d) =>
@@ -655,21 +693,67 @@ class _FilterSheetState extends State<_FilterSheet> {
               const SizedBox(height: 16),
               const Text('Kategori', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 12)),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String?>(
-                value: _catId,
-                decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              TextField(
+                controller: _catSearchCtrl,
+                onChanged: (v) => setState(() => _catSearch = v),
+                decoration: InputDecoration(
+                  hintText: 'Cari kategori...',
+                  hintStyle: const TextStyle(fontSize: 13),
+                  prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.textHint),
+                  suffixIcon: _catSearch.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 16),
+                          onPressed: () => setState(() {
+                            _catSearch = '';
+                            _catSearchCtrl.clear();
+                          }),
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   isDense: true,
                 ),
-                hint: const Text('Semua kategori'),
-                items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('Semua kategori')),
-                  ...categories.map((c) => DropdownMenuItem<String?>(
-                    value: c.id,
-                    child: Text('${c.icon} ${c.name}'),
-                  )),
-                ],
-                onChanged: (v) => setState(() => _catId = v),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 180),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.divider),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // "Semua" option
+                      if (_catSearch.isEmpty)
+                        _CatOption(
+                          label: 'Semua kategori',
+                          selected: _catId == null,
+                          onTap: () => setState(() => _catId = null),
+                        ),
+                      ...(() {
+                        final filtered = _catSearch.isEmpty
+                            ? categories
+                            : categories.where((c) =>
+                                c.name.toLowerCase().contains(_catSearch.toLowerCase())).toList();
+                        if (filtered.isEmpty) {
+                          return [
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text('Tidak ditemukan "$_catSearch"',
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                            ),
+                          ];
+                        }
+                        return filtered.map((c) => _CatOption(
+                          label: '${c.icon} ${c.name}',
+                          selected: _catId == c.id,
+                          onTap: () => setState(() => _catId = c.id),
+                        )).toList();
+                      })(),
+                    ],
+                  ),
+                ),
               ),
             ],
 
@@ -678,21 +762,66 @@ class _FilterSheetState extends State<_FilterSheet> {
               const SizedBox(height: 16),
               const Text('Rekening', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 12)),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String?>(
-                value: _accId,
-                decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              TextField(
+                controller: _accSearchCtrl,
+                onChanged: (v) => setState(() => _accSearch = v),
+                decoration: InputDecoration(
+                  hintText: 'Cari rekening...',
+                  hintStyle: const TextStyle(fontSize: 13),
+                  prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.textHint),
+                  suffixIcon: _accSearch.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 16),
+                          onPressed: () => setState(() {
+                            _accSearch = '';
+                            _accSearchCtrl.clear();
+                          }),
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   isDense: true,
                 ),
-                hint: const Text('Semua rekening'),
-                items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('Semua rekening')),
-                  ...accounts.map((a) => DropdownMenuItem<String?>(
-                    value: a.id,
-                    child: Text(a.name),
-                  )),
-                ],
-                onChanged: (v) => setState(() => _accId = v),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 160),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.divider),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (_accSearch.isEmpty)
+                        _CatOption(
+                          label: 'Semua rekening',
+                          selected: _accId == null,
+                          onTap: () => setState(() => _accId = null),
+                        ),
+                      ...(() {
+                        final filtered = _accSearch.isEmpty
+                            ? accounts
+                            : accounts.where((a) =>
+                                a.name.toLowerCase().contains(_accSearch.toLowerCase())).toList();
+                        if (filtered.isEmpty) {
+                          return [
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text('Tidak ditemukan "$_accSearch"',
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                            ),
+                          ];
+                        }
+                        return filtered.map((a) => _CatOption(
+                          label: a.name,
+                          selected: _accId == a.id,
+                          onTap: () => setState(() => _accId = a.id),
+                        )).toList();
+                      })(),
+                    ],
+                  ),
+                ),
               ),
             ],
 
@@ -766,6 +895,44 @@ class _FilterSheetState extends State<_FilterSheet> {
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CatOption extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CatOption({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+              size: 18,
+              color: selected ? AppColors.primary : AppColors.textHint,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  color: selected ? AppColors.primary : AppColors.textPrimary,
+                ),
+              ),
             ),
           ],
         ),

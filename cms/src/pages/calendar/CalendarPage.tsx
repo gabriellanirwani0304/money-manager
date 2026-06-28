@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
+import { useTheme } from '@/context/ThemeContext'
 import { listTransactions, type Transaction } from '@/api/transactions'
 import { listAccounts, type Account } from '@/api/accounts'
 import { Card } from '@/components/ui/card'
@@ -7,7 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import PageHeader from '@/components/shared/PageHeader'
-import { ChevronLeft, ChevronRight, ArrowLeftRight, CalendarDays, TrendingDown, Flame } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ArrowLeftRight, CalendarDays, TrendingDown, TrendingUp, Flame, Tag, Zap, BarChart3, Activity, Wallet, Hash } from 'lucide-react'
 
 const DAY_NAMES = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
 const MONTH_NAMES = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']
@@ -24,6 +25,9 @@ function compact(n: number) {
 interface DayData { income: number; expense: number; transferCount: number; count: number }
 
 export default function CalendarPage() {
+  const { theme } = useTheme()
+  const cellBase = theme === 'sakura' ? 'oklch(1 0 0)' : 'var(--card)'
+
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
@@ -105,6 +109,38 @@ export default function CalendarPage() {
     .filter(([, d]) => d.expense > 0)
     .sort(([, a], [, b]) => b.expense - a.expense)[0]
 
+  // Top expense category
+  const topCategory = useMemo(() => {
+    const catMap: Record<string, { name: string; icon: string; amount: number }> = {}
+    filteredTxs.filter(t => t.type === 'expense' && t.category).forEach(t => {
+      const k = t.category!.id
+      if (!catMap[k]) catMap[k] = { name: t.category!.name, icon: t.category!.icon ?? '?', amount: 0 }
+      catMap[k].amount += t.amount
+    })
+    return Object.values(catMap).sort((a, b) => b.amount - a.amount)[0] ?? null
+  }, [filteredTxs])
+
+  // Day of week with highest total expense
+  const busiestDow = useMemo(() => {
+    const dowExp = [0, 0, 0, 0, 0, 0, 0]
+    filteredTxs.filter(t => t.type === 'expense').forEach(t => {
+      dowExp[new Date(t.date).getDay()] += t.amount
+    })
+    const max = Math.max(...dowExp)
+    if (max === 0) return null
+    return { label: DAY_NAMES[dowExp.indexOf(max)], amount: max }
+  }, [filteredTxs])
+
+  // Day with most transactions
+  const busiestDay = useMemo(() =>
+    Object.entries(txMap).sort(([, a], [, b]) => b.count - a.count)[0] ?? null
+  , [txMap])
+
+  // Biggest income day
+  const biggestIncomeDay = useMemo(() =>
+    Object.entries(txMap).filter(([, d]) => d.income > 0).sort(([, a], [, b]) => b.income - a.income)[0] ?? null
+  , [txMap])
+
   // No-spend streak ending today
   const noSpendStreak = useMemo(() => {
     let streak = 0
@@ -117,6 +153,10 @@ export default function CalendarPage() {
     }
     return streak
   }, [txMap, year, month, lastDay])
+
+  const totalTxCount = filteredTxs.length
+  const expenseTxCount = filteredTxs.filter(t => t.type === 'expense').length
+  const avgExpensePerTx = expenseTxCount > 0 ? Math.round(totalExpense / expenseTxCount) : 0
 
   return (
     <div className="space-y-4">
@@ -187,8 +227,8 @@ export default function CalendarPage() {
                 const isToday = dateStr === todayStr
                 const isSelected = dateStr === selected
                 const dow = (firstDow + day - 1) % 7
-                // Heatmap: red tint intensity based on expense amount
-                const heatIntensity = data?.expense ? Math.min((data.expense / maxDayExpense) * 0.18, 0.18) : 0
+                // Heatmap: very soft pastel expense tint, up to 8% intensity
+                const heatPct = data?.expense ? Math.min(Math.round((data.expense / maxDayExpense) * 8), 8) : 0
 
                 return (
                   <button key={dateStr} onClick={() => setSelected(isSelected ? null : dateStr)}
@@ -196,10 +236,10 @@ export default function CalendarPage() {
                       ${isSelected ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/40'}`}
                     style={{
                       backgroundColor: isSelected
-                        ? 'hsl(var(--primary) / 0.06)'
-                        : data?.expense
-                        ? `rgba(239,68,68,${heatIntensity})`
-                        : 'hsl(var(--card))'
+                        ? `color-mix(in oklch, var(--primary) 8%, ${cellBase})`
+                        : heatPct > 0
+                        ? `color-mix(in oklch, var(--color-red-200) ${heatPct}%, ${cellBase})`
+                        : cellBase
                     }}
                   >
                     <span className={`text-xs font-semibold mb-0.5 ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : isToday ? 'text-primary' : ''}`}>
@@ -243,28 +283,45 @@ export default function CalendarPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-xl border bg-green-50 dark:bg-green-950/20 p-4">
-          <p className="text-xs text-muted-foreground mb-1">Pemasukan</p>
-          <p className="text-base font-bold text-green-600">+{rp(totalIncome)}</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="flex items-center gap-3 rounded-xl border bg-green-50 dark:bg-green-950/20 p-4">
+          <TrendingUp size={20} className="text-green-600 shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Pemasukan</p>
+            <p className="text-base font-bold text-green-600">+{rp(totalIncome)}</p>
+          </div>
         </div>
-        <div className="rounded-xl border bg-red-50 dark:bg-red-950/20 p-4">
-          <p className="text-xs text-muted-foreground mb-1">Pengeluaran</p>
-          <p className="text-base font-bold text-red-500">-{rp(totalExpense)}</p>
+        <div className="flex items-center gap-3 rounded-xl border bg-red-50 dark:bg-red-950/20 p-4">
+          <TrendingDown size={20} className="text-red-500 shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Pengeluaran</p>
+            <p className="text-base font-bold text-red-500">-{rp(totalExpense)}</p>
+          </div>
         </div>
-        <div className={`rounded-xl border p-4 ${net >= 0 ? 'bg-green-50 dark:bg-green-950/20' : 'bg-red-50 dark:bg-red-950/20'}`}>
-          <p className="text-xs text-muted-foreground mb-1">Selisih</p>
-          <p className={`text-base font-bold ${net >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-            {net >= 0 ? '+' : ''}{rp(net)}
-          </p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            {savingsRate >= 0 ? `Tabungan ${savingsRate}%` : `Defisit ${Math.abs(savingsRate)}%`}
-          </p>
+        <div className={`flex items-center gap-3 rounded-xl border p-4 ${net >= 0 ? 'bg-green-50 dark:bg-green-950/20' : 'bg-red-50 dark:bg-red-950/20'}`}>
+          <Wallet size={20} className={`shrink-0 ${net >= 0 ? 'text-green-600' : 'text-red-500'}`} />
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Selisih</p>
+            <p className={`text-base font-bold ${net >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {net >= 0 ? '+' : ''}{rp(net)}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {savingsRate >= 0 ? `Tabungan ${savingsRate}%` : `Defisit ${Math.abs(savingsRate)}%`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border bg-card p-4">
+          <Hash size={20} className="text-muted-foreground shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Jumlah transaksi</p>
+            <p className="text-base font-bold">{totalTxCount}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{activeDays} hari aktif</p>
+          </div>
         </div>
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
           <CalendarDays size={18} className="text-muted-foreground shrink-0" />
           <div>
@@ -288,11 +345,86 @@ export default function CalendarPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
+          <Activity size={18} className="text-muted-foreground shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Rata-rata belanja</p>
+            {expenseTxCount > 0 ? (
+              <>
+                <p className="text-sm font-bold text-red-500">{rp(avgExpensePerTx)}</p>
+                <p className="text-[11px] text-muted-foreground">per transaksi</p>
+              </>
+            ) : <p className="text-sm text-muted-foreground">—</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
           <Flame size={18} className={noSpendStreak >= 3 ? 'text-orange-500 shrink-0' : 'text-muted-foreground shrink-0'} />
           <div>
             <p className="text-xs text-muted-foreground">No-spend streak</p>
             <p className="text-sm font-bold">{noSpendStreak} hari</p>
             <p className="text-[11px] text-muted-foreground">berturut tanpa pengeluaran</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Extra insights */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {/* Top expense category */}
+        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
+          <Tag size={18} className="text-muted-foreground shrink-0" />
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Kategori terbesar</p>
+            {topCategory ? (
+              <>
+                <p className="text-sm font-bold truncate">{topCategory.icon} {topCategory.name}</p>
+                <p className="text-[11px] text-red-500">{rp(topCategory.amount)}</p>
+              </>
+            ) : <p className="text-sm text-muted-foreground">—</p>}
+          </div>
+        </div>
+
+        {/* Busiest day of week */}
+        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
+          <BarChart3 size={18} className="text-muted-foreground shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Hari paling boros</p>
+            {busiestDow ? (
+              <>
+                <p className="text-sm font-bold">{busiestDow.label}</p>
+                <p className="text-[11px] text-muted-foreground">total {rp(busiestDow.amount)}</p>
+              </>
+            ) : <p className="text-sm text-muted-foreground">—</p>}
+          </div>
+        </div>
+
+        {/* Day with most transactions */}
+        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
+          <Zap size={18} className="text-muted-foreground shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Hari tersibuk</p>
+            {busiestDay ? (
+              <>
+                <p className="text-sm font-bold">
+                  {(() => { const [,m,d] = busiestDay[0].split('-'); return `${d}/${m}` })()}
+                </p>
+                <p className="text-[11px] text-muted-foreground">{busiestDay[1].count} transaksi</p>
+              </>
+            ) : <p className="text-sm text-muted-foreground">—</p>}
+          </div>
+        </div>
+
+        {/* Biggest income day */}
+        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
+          <TrendingUp size={18} className="text-green-600 shrink-0" />
+          <div>
+            <p className="text-xs text-muted-foreground">Pemasukan terbesar</p>
+            {biggestIncomeDay ? (
+              <>
+                <p className="text-sm font-bold text-green-600">{rp(biggestIncomeDay[1].income)}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {(() => { const [,m,d] = biggestIncomeDay[0].split('-'); return `${d}/${m}` })()}
+                </p>
+              </>
+            ) : <p className="text-sm text-muted-foreground">—</p>}
           </div>
         </div>
       </div>

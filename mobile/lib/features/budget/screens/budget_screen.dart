@@ -310,8 +310,17 @@ class _AddBudgetSheet extends StatefulWidget {
 
 class _AddBudgetSheetState extends State<_AddBudgetSheet> {
   final _amountCtrl = TextEditingController();
+  final _catSearchCtrl = TextEditingController();
   String? _selectedCategoryId;
+  String _catSearch = '';
   bool _submitting = false;
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _catSearchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -338,18 +347,110 @@ class _AddBudgetSheetState extends State<_AddBudgetSheet> {
           Consumer<TransactionProvider>(
             builder: (_, tp, __) {
               final cats = tp.categories.where((c) => c.type == 'expense').toList();
-              return DropdownButtonFormField<String>(
-                value: _selectedCategoryId,
-                decoration: const InputDecoration(
-                  labelText: 'Kategori Pengeluaran',
-                  prefixIcon: Icon(Icons.category_outlined, color: AppColors.primary),
-                ),
-                hint: const Text('Pilih kategori'),
-                items: cats.map((c) => DropdownMenuItem(
-                  value: c.id,
-                  child: Text(c.name),
-                )).toList(),
-                onChanged: (v) => setState(() => _selectedCategoryId = v),
+              final filtered = _catSearch.isEmpty
+                  ? cats
+                  : cats.where((c) =>
+                      c.name.toLowerCase().contains(_catSearch.toLowerCase())).toList();
+              final selected = cats.where((c) => c.id == _selectedCategoryId).firstOrNull;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Kategori Pengeluaran',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 8),
+                  if (selected != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          Text('${selected.icon} ${selected.name}',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: () => setState(() => _selectedCategoryId = null),
+                            child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textHint),
+                          ),
+                        ],
+                      ),
+                    ),
+                  TextField(
+                    controller: _catSearchCtrl,
+                    onChanged: (v) => setState(() => _catSearch = v),
+                    decoration: InputDecoration(
+                      hintText: 'Cari kategori...',
+                      hintStyle: const TextStyle(fontSize: 13),
+                      prefixIcon: const Icon(Icons.search_rounded, size: 18, color: AppColors.textHint),
+                      suffixIcon: _catSearch.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 16),
+                              onPressed: () => setState(() {
+                                _catSearch = '';
+                                _catSearchCtrl.clear();
+                              }),
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 160),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.divider),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: filtered.isEmpty
+                            ? [
+                                Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Text(
+                                    _catSearch.isEmpty ? 'Belum ada kategori' : 'Tidak ditemukan "$_catSearch"',
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                  ),
+                                ),
+                              ]
+                            : filtered.map((c) => InkWell(
+                                onTap: () => setState(() {
+                                  _selectedCategoryId = c.id;
+                                  _catSearch = '';
+                                  _catSearchCtrl.clear();
+                                }),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _selectedCategoryId == c.id
+                                            ? Icons.radio_button_checked_rounded
+                                            : Icons.radio_button_unchecked_rounded,
+                                        size: 18,
+                                        color: _selectedCategoryId == c.id
+                                            ? AppColors.primary : AppColors.textHint,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text('${c.icon} ${c.name}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: _selectedCategoryId == c.id
+                                                ? FontWeight.w600 : FontWeight.normal,
+                                            color: _selectedCategoryId == c.id
+                                                ? AppColors.primary : AppColors.textPrimary,
+                                          )),
+                                    ],
+                                  ),
+                                ),
+                              )).toList(),
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
           ),
