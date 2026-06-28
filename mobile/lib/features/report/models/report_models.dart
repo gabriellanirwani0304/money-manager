@@ -49,6 +49,20 @@ class CategoryBreakdown {
   }
 }
 
+class WeekSummary {
+  final int week;
+  final String label;
+  final double income;
+  final double expense;
+
+  const WeekSummary({
+    required this.week,
+    required this.label,
+    required this.income,
+    required this.expense,
+  });
+}
+
 class ReportInsights {
   final String? topCategoryName;
   final double? topCategoryAmount;

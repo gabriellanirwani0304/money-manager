@@ -19,6 +19,7 @@ class TransactionProvider extends ChangeNotifier {
   // Filters
   String? _filterType;
   String? _filterCategoryId;
+  String? _filterAccountId;
   String? _startDate;
   String? _endDate;
   String? _search;
@@ -33,16 +34,21 @@ class TransactionProvider extends ChangeNotifier {
   double get totalExpense => _totalExpense;
   String? get filterType => _filterType;
   String? get filterCategoryId => _filterCategoryId;
+  String? get filterAccountId => _filterAccountId;
+  String? get filterStartDate => _startDate;
+  String? get filterEndDate => _endDate;
 
   void setFilter({
     String? type,
     String? categoryId,
+    String? accountId,
     String? startDate,
     String? endDate,
     String? search,
   }) {
     _filterType = type;
     _filterCategoryId = categoryId;
+    _filterAccountId = accountId;
     _startDate = startDate;
     _endDate = endDate;
     _search = search;
@@ -55,6 +61,7 @@ class TransactionProvider extends ChangeNotifier {
   void clearFilters() {
     _filterType = null;
     _filterCategoryId = null;
+    _filterAccountId = null;
     _startDate = null;
     _endDate = null;
     _search = null;
@@ -76,6 +83,7 @@ class TransactionProvider extends ChangeNotifier {
       final params = <String, dynamic>{'page': _page, 'limit': 20};
       if (_filterType != null) params['type'] = _filterType;
       if (_filterCategoryId != null) params['category_id'] = _filterCategoryId;
+      if (_filterAccountId != null) params['account_id'] = _filterAccountId;
       if (_startDate != null) params['start_date'] = _startDate;
       if (_endDate != null) params['end_date'] = _endDate;
       if (_search != null && _search!.isNotEmpty) params['search'] = _search;

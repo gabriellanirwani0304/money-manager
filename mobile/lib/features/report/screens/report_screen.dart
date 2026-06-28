@@ -20,7 +20,13 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 2, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl.addListener(() {
+      if (!_tabCtrl.indexIsChanging && _tabCtrl.index == 2) {
+        final p = context.read<ReportProvider>();
+        p.loadWeekly(month: p.month, year: p.year);
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ReportProvider>().load();
     });
@@ -71,6 +77,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
           tabs: const [
             Tab(text: 'Ringkasan'),
             Tab(text: 'Kategori'),
+            Tab(text: 'Mingguan'),
           ],
         ),
       ),
@@ -85,6 +92,7 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
             children: [
               _SummaryTab(provider: p),
               _CategoryTab(provider: p),
+              _WeeklyTab(provider: p),
             ],
           );
         },
@@ -463,6 +471,177 @@ class _LegendItem extends StatelessWidget {
         const SizedBox(width: 6),
         Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
       ],
+    );
+  }
+}
+
+class _WeeklyTab extends StatelessWidget {
+  final ReportProvider provider;
+  const _WeeklyTab({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.weeklyLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+
+    if (provider.weekly.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.bar_chart_rounded, size: 64, color: AppColors.textHint),
+            const SizedBox(height: 12),
+            const Text('Belum ada data mingguan',
+                style: TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => provider.loadWeekly(),
+              child: const Text('Muat Data'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final weeks = provider.weekly;
+    final maxVal = weeks.fold(0.0, (m, w) => m > w.income ? m > w.expense ? m : w.expense : w.income > w.expense ? w.income : w.expense);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Bar chart
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionHeader(title: '📅 Pendapatan & Pengeluaran per Minggu'),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 200,
+                  child: BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: maxVal * 1.25,
+                      barTouchData: BarTouchData(enabled: false),
+                      titlesData: FlTitlesData(
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (v, _) {
+                              final idx = v.toInt();
+                              if (idx < 0 || idx >= weeks.length) return const SizedBox();
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text('M${weeks[idx].week}',
+                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      gridData: FlGridData(
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (_) =>
+                            const FlLine(color: AppColors.divider, strokeWidth: 1),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      barGroups: weeks.asMap().entries.map((e) {
+                        return BarChartGroupData(
+                          x: e.key,
+                          barRods: [
+                            BarChartRodData(
+                              toY: e.value.income,
+                              color: AppColors.income,
+                              width: 12,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            ),
+                            BarChartRodData(
+                              toY: e.value.expense,
+                              color: AppColors.expense,
+                              width: 12,
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _LegendItem(color: AppColors.income, label: 'Pemasukan'),
+                    const SizedBox(width: 20),
+                    _LegendItem(color: AppColors.expense, label: 'Pengeluaran'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Summary per week
+          ...weeks.map((w) {
+            final net = w.income - w.expense;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Minggu ${w.week}',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text(
+                          net >= 0 ? '+${CurrencyFormatter.compact(net)}' : CurrencyFormatter.compact(net),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: net >= 0 ? AppColors.income : AppColors.expense,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Pemasukan', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                              Text(CurrencyFormatter.compact(w.income),
+                                  style: const TextStyle(color: AppColors.income, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Pengeluaran', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                              Text(CurrencyFormatter.compact(w.expense),
+                                  style: const TextStyle(color: AppColors.expense, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 }

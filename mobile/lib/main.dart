@@ -17,6 +17,7 @@ import 'features/budget/providers/budget_provider.dart';
 import 'features/budget/screens/budget_screen.dart';
 import 'features/report/providers/report_provider.dart';
 import 'features/report/screens/report_screen.dart';
+import 'features/category/providers/category_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +42,7 @@ class MoneyManagerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AccountProvider()),
         ChangeNotifierProvider(create: (_) => BudgetProvider()),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
+        ChangeNotifierProvider(create: (_) => CategoryProvider()),
       ],
       child: MaterialApp(
         title: 'MoneyMate',

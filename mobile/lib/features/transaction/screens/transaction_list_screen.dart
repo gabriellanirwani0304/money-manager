@@ -4,10 +4,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../providers/transaction_provider.dart';
+import '../../account/providers/account_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../shared/widgets/money_card.dart';
 import 'add_transaction_screen.dart';
+import '../../category/screens/category_screen.dart';
 
 class TransactionListScreen extends StatefulWidget {
   const TransactionListScreen({super.key});
@@ -75,6 +77,14 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
             },
           ),
           IconButton(
+            icon: const Icon(Icons.category_outlined),
+            tooltip: 'Kelola Kategori',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CategoryScreen()),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.download_rounded),
             tooltip: 'Export CSV',
             onPressed: _showExportDialog,
@@ -97,7 +107,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
               _buildSummaryBar(p),
 
               // Filter chips
-              if (p.filterType != null) _buildActiveFilter(p),
+              _buildActiveFilter(p),
 
               // List
               Expanded(
@@ -180,21 +190,65 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   }
 
   Widget _buildActiveFilter(TransactionProvider p) {
+    final chips = <Widget>[];
+
+    if (p.filterType != null) {
+      chips.add(_chip(
+        label: p.filterType == 'income' ? '📈 Pemasukan' : (p.filterType == 'transfer' ? '🔄 Transfer' : '📉 Pengeluaran'),
+        onRemove: () => p.setFilter(categoryId: p.filterCategoryId, accountId: p.filterAccountId, startDate: p.filterStartDate, endDate: p.filterEndDate),
+      ));
+    }
+    if (p.filterCategoryId != null) {
+      final cat = p.categories.where((c) => c.id == p.filterCategoryId).firstOrNull;
+      chips.add(_chip(
+        label: cat != null ? '${cat.icon} ${cat.name}' : 'Kategori',
+        onRemove: () => p.setFilter(type: p.filterType, accountId: p.filterAccountId, startDate: p.filterStartDate, endDate: p.filterEndDate),
+      ));
+    }
+    if (p.filterAccountId != null) {
+      final acc = context.read<AccountProvider>().accounts.where((a) => a.id == p.filterAccountId).firstOrNull;
+      chips.add(_chip(
+        label: acc?.name ?? 'Rekening',
+        onRemove: () => p.setFilter(type: p.filterType, categoryId: p.filterCategoryId, startDate: p.filterStartDate, endDate: p.filterEndDate),
+      ));
+    }
+    if (p.filterStartDate != null || p.filterEndDate != null) {
+      chips.add(_chip(
+        label: '📅 ${p.filterStartDate ?? ''} — ${p.filterEndDate ?? ''}',
+        onRemove: () => p.setFilter(type: p.filterType, categoryId: p.filterCategoryId, accountId: p.filterAccountId),
+      ));
+    }
+
+    if (chips.isEmpty) return const SizedBox();
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Row(
-        children: [
-          FilterChip(
-            label: Text(p.filterType == 'income' ? 'Pemasukan' : 'Pengeluaran'),
-            selected: true,
-            onSelected: (_) {},
-            onDeleted: () => p.clearFilters(),
-            selectedColor: AppColors.primary.withOpacity(0.15),
-            labelStyle: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
-            deleteIconColor: AppColors.primary,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          ...chips,
+          TextButton(
+            onPressed: p.clearFilters,
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+            child: const Text('Reset', style: TextStyle(fontSize: 12)),
           ),
-        ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _chip({required String label, required VoidCallback onRemove}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Chip(
+        label: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+        deleteIcon: const Icon(Icons.close_rounded, size: 14, color: AppColors.primary),
+        onDeleted: onRemove,
+        backgroundColor: AppColors.primary.withOpacity(0.1),
+        side: BorderSide.none,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
       ),
     );
   }
@@ -327,53 +381,32 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   }
 
   void _showFilterSheet() {
+    // Pre-load categories (all types) and accounts
+    context.read<TransactionProvider>().loadCategories();
+    context.read<AccountProvider>().load();
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Filter Transaksi',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
-            const Text('Tipe', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _FilterButton(
-                  label: '📉 Pengeluaran',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.read<TransactionProvider>().setFilter(type: 'expense');
-                  },
-                ),
-                const SizedBox(width: 10),
-                _FilterButton(
-                  label: '📈 Pemasukan',
-                  onTap: () {
-                    Navigator.pop(context);
-                    context.read<TransactionProvider>().setFilter(type: 'income');
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  context.read<TransactionProvider>().clearFilters();
-                },
-                child: const Text('Reset Filter'),
-              ),
-            ),
-          ],
-        ),
+      builder: (ctx) => _FilterSheet(
+        txProvider: context.read<TransactionProvider>(),
+        accProvider: context.read<AccountProvider>(),
+        onApply: (type, catId, accId, start, end) {
+          Navigator.pop(ctx);
+          context.read<TransactionProvider>().setFilter(
+            type: type,
+            categoryId: catId,
+            accountId: accId,
+            startDate: start,
+            endDate: end,
+          );
+        },
+        onReset: () {
+          Navigator.pop(ctx);
+          context.read<TransactionProvider>().clearFilters();
+        },
       ),
     );
   }
@@ -534,22 +567,208 @@ class _SummaryChip extends StatelessWidget {
   }
 }
 
-class _FilterButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
+class _FilterSheet extends StatefulWidget {
+  final TransactionProvider txProvider;
+  final AccountProvider accProvider;
+  final void Function(String? type, String? catId, String? accId, String? start, String? end) onApply;
+  final VoidCallback onReset;
 
-  const _FilterButton({required this.label, required this.onTap});
+  const _FilterSheet({
+    required this.txProvider,
+    required this.accProvider,
+    required this.onApply,
+    required this.onReset,
+  });
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  String? _type;
+  String? _catId;
+  String? _accId;
+  DateTime? _startDate;
+  DateTime? _endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.txProvider;
+    _type = p.filterType;
+    _catId = p.filterCategoryId;
+    _accId = p.filterAccountId;
+    _startDate = p.filterStartDate != null ? DateTime.tryParse(p.filterStartDate!) : null;
+    _endDate = p.filterEndDate != null ? DateTime.tryParse(p.filterEndDate!) : null;
+  }
+
+  String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _display(DateTime d) => '${d.day}/${d.month}/${d.year}';
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    final categories = widget.txProvider.categories;
+    final accounts = widget.accProvider.accounts;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Filter Transaksi',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 20),
+
+            // Tipe
+            const Text('Tipe', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final t in [
+                  ('expense', '📉 Pengeluaran'),
+                  ('income', '📈 Pemasukan'),
+                  ('transfer', '🔄 Transfer'),
+                ])
+                  ChoiceChip(
+                    label: Text(t.$2, style: const TextStyle(fontSize: 13)),
+                    selected: _type == t.$1,
+                    onSelected: (_) => setState(() => _type = _type == t.$1 ? null : t.$1),
+                    selectedColor: AppColors.primary.withOpacity(0.15),
+                    labelStyle: TextStyle(
+                      color: _type == t.$1 ? AppColors.primary : AppColors.textPrimary,
+                      fontWeight: _type == t.$1 ? FontWeight.w700 : FontWeight.normal,
+                    ),
+                  ),
+              ],
+            ),
+
+            // Kategori
+            if (categories.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Text('Kategori', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 12)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String?>(
+                value: _catId,
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  isDense: true,
+                ),
+                hint: const Text('Semua kategori'),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Semua kategori')),
+                  ...categories.map((c) => DropdownMenuItem<String?>(
+                    value: c.id,
+                    child: Text('${c.icon} ${c.name}'),
+                  )),
+                ],
+                onChanged: (v) => setState(() => _catId = v),
+              ),
+            ],
+
+            // Rekening
+            if (accounts.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Text('Rekening', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 12)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String?>(
+                value: _accId,
+                decoration: const InputDecoration(
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  isDense: true,
+                ),
+                hint: const Text('Semua rekening'),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Semua rekening')),
+                  ...accounts.map((a) => DropdownMenuItem<String?>(
+                    value: a.id,
+                    child: Text(a.name),
+                  )),
+                ],
+                onChanged: (v) => setState(() => _accId = v),
+              ),
+            ],
+
+            // Tanggal
+            const SizedBox(height: 16),
+            const Text('Rentang Tanggal', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 12)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _startDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) setState(() => _startDate = picked);
+                    },
+                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10)),
+                    child: Text(
+                      _startDate != null ? _display(_startDate!) : 'Dari',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ),
+                const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('—')),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _endDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(const Duration(days: 1)),
+                      );
+                      if (picked != null) setState(() => _endDate = picked);
+                    },
+                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10)),
+                    child: Text(
+                      _endDate != null ? _display(_endDate!) : 'Sampai',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: widget.onReset,
+                    child: const Text('Reset'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: () => widget.onApply(
+                      _type,
+                      _catId,
+                      _accId,
+                      _startDate != null ? _fmt(_startDate!) : null,
+                      _endDate != null ? _fmt(_endDate!) : null,
+                    ),
+                    child: const Text('Terapkan'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        child: Text(label, style: const TextStyle(fontSize: 13)),
       ),
     );
   }
