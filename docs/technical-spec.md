@@ -26,6 +26,18 @@ Money Manager adalah aplikasi personal finance yang memungkinkan pengguna melaca
 | UUID            | `github.com/google/uuid`     |
 | Env Config      | `github.com/joho/godotenv`   |
 
+### CMS
+| Komponen        | Teknologi                      |
+|----------------|--------------------------------|
+| Framework       | React 19 + TypeScript          |
+| Build Tool      | Vite                           |
+| Styling         | Tailwind CSS                   |
+| Component Lib   | shadcn/ui (Radix UI)           |
+| HTTP Client     | Axios                          |
+| Charts          | Recharts                       |
+| Icons           | Lucide React                   |
+| Notifications   | Sonner (toast)                 |
+
 ### Mobile
 | Komponen        | Teknologi                      |
 |----------------|--------------------------------|
@@ -41,24 +53,28 @@ Money Manager adalah aplikasi personal finance yang memungkinkan pengguna melaca
 
 ## 3. Features
 
-### 3.1 Core Features (Wajib)
+### 3.1 Core Features
 | # | Fitur | Deskripsi |
 |---|-------|-----------|
 | F01 | Autentikasi | Register, Login, JWT refresh token |
-| F02 | Manajemen Kategori | CRUD kategori income/expense dengan ikon & warna |
-| F03 | Input Transaksi | Catat income/expense dengan kategori, nominal, deskripsi, tanggal |
-| F04 | Riwayat Transaksi | List transaksi dengan filter tanggal, kategori, tipe |
-| F05 | Dashboard | Ringkasan saldo, income vs expense bulan ini |
+| F02 | Manajemen Kategori | CRUD kategori income/expense dengan ikon & warna; server-side search & pagination |
+| F03 | Input Transaksi | Catat income/expense/transfer dengan kategori, rekening, nominal, deskripsi, tanggal |
+| F04 | Riwayat Transaksi | List transaksi dengan filter tanggal, kategori, rekening, tipe; full-text search |
+| F05 | Dashboard | Ringkasan saldo, income vs expense bulan ini, top expenses, budget alerts |
+| F06 | Manajemen Rekening | CRUD rekening (bank/cash/e-wallet/investasi); saldo otomatis dari transaksi |
+| F07 | Transfer Antar Rekening | Transaksi tipe transfer yang menggerakkan saldo dua rekening sekaligus |
 
-### 3.2 Advanced Features (Tambahan)
+### 3.2 Advanced Features
 | # | Fitur | Deskripsi |
 |---|-------|-----------|
-| F06 | Budget Planning | Tetapkan anggaran per kategori per bulan, alert saat 80%+ terpakai |
-| F07 | Laporan Analitik | Pie chart per kategori, bar chart tren bulanan 6 bulan |
-| F08 | Smart Insights | Top 3 kategori terbesar, deteksi pengeluaran tidak wajar |
-| F09 | Ekspor CSV | Export transaksi ke file CSV per rentang tanggal |
-| F10 | Pencarian Transaksi | Full-text search + filter tipe & kategori |
-| F11 | Multi-currency | Pengaturan mata uang default (IDR/USD/SGD/EUR) |
+| F08 | Budget Planning | Tetapkan anggaran per kategori per bulan, alert 80%+ terpakai, salin dari bulan lalu |
+| F09 | Laporan Analitik | Pie chart per kategori, bar chart tren bulanan, perbandingan multi-bulan, breakdown mingguan |
+| F10 | Smart Insights | Top kategori terbesar, month-over-month change, savings rate |
+| F11 | Ekspor CSV | Export transaksi ke file CSV per rentang tanggal |
+| F12 | Input Massal | Form collapsible bulk entry — banyak transaksi dalam satu submit |
+| F13 | Import CSV | Wizard 4-langkah: upload → mapping kolom → preview → import |
+| F14 | Kalender Transaksi | Heatmap per hari, filter per rekening, statistik mingguan |
+| F15 | Transaksi Berulang | Template recurring transaction (daily/weekly/monthly/yearly) |
 
 ---
 
@@ -83,6 +99,32 @@ pkg/
   response/response.go      → Standardized JSON response
   jwt/jwt.go                → Token generation & validation
 migrations/                 → SQL migration files
+```
+
+### CMS Architecture (React Admin Panel)
+
+```
+cms/src/
+  api/                        → Typed axios wrappers per resource
+    client.ts                 → Axios instance + auth interceptor (auto-refresh)
+    auth.ts / accounts.ts / categories.ts / transactions.ts / budgets.ts / reports.ts
+  components/
+    ui/                       → shadcn/ui component library
+    shared/
+      TransactionFormFields.tsx → Reusable form used by single + bulk dialogs
+      DateInput.tsx
+  pages/
+    auth/LoginPage.tsx
+    dashboard/DashboardPage.tsx
+    accounts/AccountsPage.tsx
+    categories/CategoriesPage.tsx
+    transactions/
+      TransactionsPage.tsx    → List + filter + single add/edit dialog
+      BulkTransactionDialog.tsx → Collapsible card stack for bulk entry
+    budgets/BudgetsPage.tsx   → Progress bars + copy-from-last-month
+    reports/ReportsPage.tsx   → Monthly comparison + weekly breakdown
+    calendar/CalendarPage.tsx → Heatmap + per-day transaction list
+  lib/utils.ts
 ```
 
 ### Mobile Architecture (Feature-based Clean Architecture)
@@ -168,8 +210,11 @@ cd money-manager/backend
 cp .env.example .env
 # Edit .env: set JWT_SECRET dan DB credentials
 go mod tidy
-psql "host=localhost user=moneyuser password=moneypass dbname=moneymanager sslmode=disable" -f migrations/001_init.sql
-psql "host=localhost user=moneyuser password=moneypass dbname=moneymanager sslmode=disable" -f migrations/002_seed.sql
+psql "host=localhost user=moneyuser password=moneypass dbname=moneymanager sslmode=disable" \
+  -f migrations/001_init.sql \
+  -f migrations/002_seed.sql \
+  -f migrations/003_accounts.sql \
+  -f migrations/004_transfer.sql
 go run ./cmd/server
 # Server running on :8080
 ```

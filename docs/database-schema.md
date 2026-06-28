@@ -4,6 +4,7 @@
 
 ```
 users ──< categories ──< transactions
+      ──< accounts   ──< transactions (account_id, to_account_id)
       ──< budgets
       ──< recurring_transactions ──< transactions
       ──< refresh_tokens
@@ -71,6 +72,33 @@ CREATE UNIQUE INDEX idx_categories_user_name_type ON categories(user_id, name, t
 - `icon` menggunakan nama Material Icon string
 - `color` dalam format hex `#RRGGBB`
 
+### `accounts`
+Rekening / dompet / akun keuangan. Saldo otomatis diperbarui oleh trigger atau di application layer saat transaksi berubah.
+
+```sql
+CREATE TABLE accounts (
+    id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name            VARCHAR(100)  NOT NULL,
+    type            VARCHAR(20)   NOT NULL DEFAULT 'bank'
+                                  CHECK (type IN ('bank','cash','ewallet','investment','other')),
+    bank_name       VARCHAR(100),
+    icon            VARCHAR(50)   NOT NULL DEFAULT 'account_balance',
+    color           VARCHAR(20)   NOT NULL DEFAULT '#6C5CE7',
+    initial_balance NUMERIC(15,2) NOT NULL DEFAULT 0,
+    balance         NUMERIC(15,2) NOT NULL DEFAULT 0,
+    is_active       BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_accounts_user_id ON accounts(user_id);
+```
+
+**Tipe rekening:** `bank` | `cash` | `ewallet` | `investment` | `other`
+
+---
+
 ### `transactions`
 Catatan setiap transaksi keuangan.
 
@@ -78,8 +106,10 @@ Catatan setiap transaksi keuangan.
 CREATE TABLE transactions (
     id               UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id          UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category_id      UUID          NOT NULL REFERENCES categories(id),
-    type             VARCHAR(10)   NOT NULL CHECK (type IN ('income', 'expense')),
+    category_id      UUID          REFERENCES categories(id),        -- nullable; tidak diperlukan untuk transfer
+    account_id       UUID          REFERENCES accounts(id) ON DELETE SET NULL,    -- rekening asal (opsional)
+    to_account_id    UUID          REFERENCES accounts(id) ON DELETE SET NULL,    -- rekening tujuan (transfer only)
+    type             VARCHAR(10)   NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
     amount           NUMERIC(15,2) NOT NULL CHECK (amount > 0),
     description      TEXT,
     date             DATE          NOT NULL,
@@ -92,10 +122,14 @@ CREATE INDEX idx_transactions_user_id ON transactions(user_id);
 CREATE INDEX idx_transactions_date ON transactions(date DESC);
 CREATE INDEX idx_transactions_category_id ON transactions(category_id);
 CREATE INDEX idx_transactions_type ON transactions(type);
+CREATE INDEX idx_transactions_account_id ON transactions(account_id);
+CREATE INDEX idx_transactions_to_account_id ON transactions(to_account_id);
 -- Full-text search
 CREATE INDEX idx_transactions_description_fts ON transactions
     USING gin(to_tsvector('english', COALESCE(description, '')));
 ```
+
+**Catatan:** `category_id` menjadi nullable sejak migration 004 untuk mendukung transaksi transfer.
 
 ### `budgets`
 Anggaran per kategori per bulan.

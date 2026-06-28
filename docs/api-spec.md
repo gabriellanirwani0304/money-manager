@@ -150,25 +150,38 @@ Ringkasan lengkap untuk halaman utama. Membutuhkan autentikasi.
 ## Categories
 
 ### GET /categories
-List semua kategori (global default + milik user).
+List kategori dengan pagination dan pencarian.
 
 **Query Params:**
-- `type` (string, optional): `income` | `expense`
+| Param | Type | Default | Keterangan |
+|-------|------|---------|------------|
+| type | string | - | `income` \| `expense` |
+| search | string | - | Cari nama kategori |
+| page | int | 1 | Halaman |
+| limit | int | 50 | Per halaman |
 
 **Response 200:**
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "id": "uuid",
-      "name": "Makanan",
-      "type": "expense",
-      "icon": "restaurant",
-      "color": "#EF4444",
-      "is_default": true
+  "data": {
+    "categories": [
+      {
+        "id": "uuid",
+        "name": "Makanan",
+        "type": "expense",
+        "icon": "restaurant",
+        "color": "#EF4444",
+        "is_default": true
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 16,
+      "total_pages": 1
     }
-  ]
+  }
 }
 ```
 
@@ -230,8 +243,9 @@ List transaksi dengan pagination dan filter.
 |-------|------|---------|------------|
 | page | int | 1 | Halaman |
 | limit | int | 20 | Per halaman (max 100) |
-| type | string | - | `income` \| `expense` |
+| type | string | - | `income` \| `expense` \| `transfer` |
 | category_id | uuid | - | Filter kategori |
+| account_id | uuid | - | Filter rekening |
 | start_date | date | - | Format: YYYY-MM-DD |
 | end_date | date | - | Format: YYYY-MM-DD |
 | search | string | - | Cari di deskripsi |
@@ -249,7 +263,10 @@ List transaksi dengan pagination dan filter.
         "amount": 85000,
         "description": "Makan siang padang",
         "date": "2026-06-28",
+        "category_id": "uuid",
+        "account_id": "uuid",
         "category": { "id": "uuid", "name": "Makanan", "icon": "restaurant", "color": "#EF4444" },
+        "account": { "id": "uuid", "name": "BCA" },
         "created_at": "2026-06-28T10:30:00Z"
       }
     ],
@@ -270,22 +287,39 @@ List transaksi dengan pagination dan filter.
 ---
 
 ### POST /transactions
-Catat transaksi baru.
+Catat transaksi baru (income, expense, atau transfer).
 
 **Request Body:**
 ```json
 {
-  "category_id": "uuid",
   "type": "expense",
+  "category_id": "uuid",
+  "account_id": "uuid",
   "amount": 85000,
   "description": "Makan siang padang",
   "date": "2026-06-28"
 }
 ```
 
+Untuk transfer antar rekening:
+```json
+{
+  "type": "transfer",
+  "account_id": "uuid-rekening-asal",
+  "to_account_id": "uuid-rekening-tujuan",
+  "amount": 500000,
+  "description": "Transfer ke tabungan",
+  "date": "2026-06-28"
+}
+```
+
+- `category_id` wajib untuk income/expense, tidak diperlukan untuk transfer
+- `account_id` opsional; jika diisi, saldo rekening otomatis berubah
+- `to_account_id` wajib untuk transfer
+
 **Response 201:** data transaksi lengkap
 
-**Errors:** `400` | `404` category tidak ditemukan
+**Errors:** `400` | `404` category/account tidak ditemukan
 
 ---
 
@@ -315,6 +349,58 @@ Hapus transaksi.
 
 ---
 
+### POST /transactions/batch
+Buat banyak transaksi sekaligus (bulk import).
+
+**Request Body:**
+```json
+{
+  "transactions": [
+    {
+      "type": "expense",
+      "category_id": "uuid",
+      "account_id": "uuid",
+      "amount": 85000,
+      "description": "Makan siang",
+      "date": "2026-06-28"
+    },
+    {
+      "type": "income",
+      "category_id": "uuid",
+      "amount": 5000000,
+      "date": "2026-06-01"
+    }
+  ]
+}
+```
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "imported": 2,
+    "failed": 0,
+    "errors": []
+  }
+}
+```
+
+Jika ada baris yang gagal, tetap diproses per baris dan error dilaporkan per index:
+```json
+{
+  "imported": 1,
+  "failed": 1,
+  "errors": [
+    { "index": 1, "message": "category not found" }
+  ]
+}
+```
+
+**Errors:** `400` body invalid
+
+---
+
 ### GET /transactions/export
 Export transaksi ke CSV.
 
@@ -331,6 +417,91 @@ Export transaksi ke CSV.
 ```
 Date,Type,Category,Amount,Description
 2026-06-28,expense,Makanan,85000,Makan siang padang
+```
+
+---
+
+## Accounts
+
+Rekening / dompet / akun keuangan pengguna. Saldo otomatis diperbarui saat transaksi dibuat, diupdate, atau dihapus.
+
+### GET /accounts
+List semua rekening aktif milik user.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "name": "BCA Tabungan",
+      "type": "bank",
+      "bank_name": "BCA",
+      "icon": "account_balance",
+      "color": "#1565C0",
+      "initial_balance": 1000000,
+      "balance": 5250000,
+      "is_active": true,
+      "created_at": "2026-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+Tipe rekening: `bank` | `cash` | `ewallet` | `investment` | `other`
+
+---
+
+### POST /accounts
+Buat rekening baru.
+
+**Request Body:**
+```json
+{
+  "name": "BCA Tabungan",
+  "type": "bank",
+  "bank_name": "BCA",
+  "icon": "account_balance",
+  "color": "#1565C0",
+  "initial_balance": 1000000
+}
+```
+
+**Response 201:** data rekening baru
+
+---
+
+### PUT /accounts/:id
+Update info rekening (nama, warna, ikon, bank_name).
+
+**Request Body:**
+```json
+{ "name": "BCA Utama", "color": "#0D47A1" }
+```
+
+**Response 200:** data rekening terbaru
+
+---
+
+### PATCH /accounts/:id/balance
+Set saldo rekening secara manual.
+
+**Request Body:**
+```json
+{ "balance": 7500000 }
+```
+
+**Response 200:** data rekening terbaru
+
+---
+
+### DELETE /accounts/:id
+Hapus rekening. Transaksi terkait tidak ikut dihapus (account_id di-set NULL).
+
+**Response 200:**
+```json
+{ "success": true, "message": "Account deleted" }
 ```
 
 ---
