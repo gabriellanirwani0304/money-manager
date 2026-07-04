@@ -283,7 +283,7 @@ export default function TransactionsPage() {
       setCategories(updated.data.data.categories ?? [])
       setForm((f) => ({ ...f, category_id: newCat.id }))
       setQuickCatOpen(false)
-      setQuickCatForm({ name: '', icon: '' })
+      setQuickCatForm({ name: '', type: 'expense', icon: '' })
       toast.success(`Kategori "${newCat.name}" ditambahkan`)
     } catch {
       toast.error('Gagal membuat kategori')
