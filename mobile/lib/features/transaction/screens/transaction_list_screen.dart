@@ -114,18 +114,6 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'fab_transaction',
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
-          );
-          if (mounted) context.read<TransactionProvider>().load();
-        },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add_rounded, color: Colors.white),
-      ),
     );
   }
 

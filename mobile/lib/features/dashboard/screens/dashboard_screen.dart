@@ -8,7 +8,8 @@ import '../../auth/providers/auth_provider.dart';
 import '../../transaction/screens/add_transaction_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final ValueChanged<int>? onNavigateTo;
+  const DashboardScreen({super.key, this.onNavigateTo});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -69,9 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: SectionHeader(
                       title: 'Transaksi Terbaru',
                       actionLabel: 'Lihat Semua',
-                      onAction: () {
-                        // Navigate to transactions tab
-                      },
+                      onAction: () => widget.onNavigateTo?.call(2),
                     ),
                   ),
                 ),

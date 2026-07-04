@@ -94,6 +94,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_budget',
         onPressed: () => _showAddDialog(context),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
