@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_theme.dart';
+import 'core/network/session_manager.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/dashboard/providers/dashboard_provider.dart';
@@ -64,12 +66,31 @@ class _AppRoot extends StatefulWidget {
 }
 
 class _AppRootState extends State<_AppRoot> {
+  StreamSubscription<void>? _sessionSub;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().checkAuth();
     });
+    _sessionSub = SessionManager.onSessionExpired.listen((_) {
+      if (mounted) {
+        context.read<AuthProvider>().forceUnauthenticated();
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(
+            content: Text('Sesi telah berakhir, silakan login kembali'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionSub?.cancel();
+    super.dispose();
   }
 
   @override

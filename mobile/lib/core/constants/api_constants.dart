@@ -1,7 +1,8 @@
 class ApiConstants {
   ApiConstants._();
 
-  static const String baseUrl = 'http://localhost:8080/api/v1';
+  // 10.0.2.2 = host machine dari Android emulator (ganti ke IP laptop jika pakai device fisik)
+  static const String baseUrl = 'http://10.0.2.2:8080/api/v1';
 
   // Auth
   static const String register = '/auth/register';

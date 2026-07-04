@@ -48,7 +48,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   SliverFillRemaining(child: _buildEmpty(context))
                 else
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (ctx, i) => _AccountCard(
@@ -72,6 +72,7 @@ class _AccountScreenState extends State<AccountScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_account',
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AddAccountScreen()),
@@ -88,10 +89,6 @@ class _AccountScreenState extends State<AccountScreen> {
     return Container(
       decoration: const BoxDecoration(
         gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(32),
-          bottomRight: Radius.circular(32),
-        ),
       ),
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 16,
@@ -109,44 +106,64 @@ class _AccountScreenState extends State<AccountScreen> {
               style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
           const SizedBox(height: 20),
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: const Icon(Icons.account_balance_wallet_rounded,
-                      color: Colors.white, size: 28),
+                      color: AppColors.primary, size: 26),
                 ),
                 const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Total Saldo',
+                          style: TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12)),
+                      const SizedBox(height: 4),
+                      Text(
+                        CurrencyFormatter.format(p.totalBalance),
+                        style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                ),
                 Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    const Text('Total Saldo',
-                        style: TextStyle(color: Colors.white70, fontSize: 13)),
-                    const SizedBox(height: 4),
                     Text(
-                      CurrencyFormatter.format(p.totalBalance),
+                      '${p.accounts.length}',
                       style: const TextStyle(
-                          color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800),
+                          color: AppColors.primary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800),
                     ),
+                    const Text('rekening',
+                        style: TextStyle(
+                            color: AppColors.textSecondary, fontSize: 11)),
                   ],
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '${p.accounts.length} rekening aktif',
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
         ],
       ),
@@ -154,43 +171,12 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   Widget _buildEmpty(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.account_balance_outlined,
-                  size: 50, color: AppColors.primary),
-            ),
-            const SizedBox(height: 20),
-            const Text('Belum ada rekening',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            const Text(
-              'Tambahkan rekening bank, e-wallet, atau dompet tunaimu untuk melacak saldo',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddAccountScreen()),
-              ).then((_) => context.read<AccountProvider>().load()),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Tambah Rekening Pertama'),
-            ),
-          ],
-        ),
-      ),
+    return EmptyState(
+      emoji: '🏦',
+      title: 'Belum ada rekening',
+      subtitle: 'Tambahkan rekening bank, e-wallet, atau dompet tunaimu untuk melacak saldo',
+      actionLabel: 'Tambah Rekening',
+      onAction: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddAccountScreen())),
     );
   }
 
@@ -298,171 +284,6 @@ class _AccountCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final color = account.parsedColor;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, top: 4),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.15),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Header strip dengan warna rekening
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                border: Border(bottom: BorderSide(color: color.withOpacity(0.15))),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(_iconData(account.icon), color: color, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(account.name,
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                        if (account.bankName.isNotEmpty)
-                          Text(account.bankName,
-                              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(account.typeLabel,
-                        style: TextStyle(
-                            color: color, fontSize: 11, fontWeight: FontWeight.w700)),
-                  ),
-                  PopupMenuButton(
-                    icon: Icon(Icons.more_vert_rounded, color: color, size: 20),
-                    itemBuilder: (_) => [
-                      PopupMenuItem(onTap: onSetBalance,
-                          child: const Row(children: [
-                            Icon(Icons.edit_rounded, size: 16),
-                            SizedBox(width: 8), Text('Set Saldo'),
-                          ])),
-                      PopupMenuItem(onTap: onEdit,
-                          child: const Row(children: [
-                            Icon(Icons.settings_outlined, size: 16),
-                            SizedBox(width: 8), Text('Edit Info'),
-                          ])),
-                      PopupMenuItem(onTap: onDelete,
-                          child: const Row(children: [
-                            Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.expense),
-                            SizedBox(width: 8),
-                            Text('Hapus', style: TextStyle(color: AppColors.expense)),
-                          ])),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Balance section
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Saldo Saat Ini',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      Text(
-                        CurrencyFormatter.format(account.balance),
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  GestureDetector(
-                    onTap: onSetBalance,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [color.withOpacity(0.8), color],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(color: color.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4)),
-                        ],
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.edit_rounded, color: Colors.white, size: 16),
-                          SizedBox(width: 6),
-                          Text('Update Saldo',
-                              style: TextStyle(
-                                  color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Initial balance info
-            if (account.initialBalance != account.balance)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded, size: 13, color: AppColors.textHint),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Saldo awal: ${CurrencyFormatter.compact(account.initialBalance)}  •  '
-                      'Perubahan: ${_formatDelta(account.balance - account.initialBalance)}',
-                      style: const TextStyle(color: AppColors.textHint, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatDelta(double delta) {
-    final sign = delta >= 0 ? '+' : '';
-    return '$sign${CurrencyFormatter.compact(delta.abs())}';
-  }
-
   IconData _iconData(String name) {
     const map = {
       'account_balance': Icons.account_balance_rounded,
@@ -474,5 +295,206 @@ class _AccountCard extends StatelessWidget {
       'savings': Icons.savings_rounded,
     };
     return map[name] ?? Icons.account_balance_rounded;
+  }
+
+  String _formatDelta(double delta) {
+    final sign = delta >= 0 ? '+' : '-';
+    return '$sign${CurrencyFormatter.compact(delta.abs())}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = account.parsedColor;
+    final dark = Color.lerp(color, Colors.black, 0.3)!;
+    final delta = account.balance - account.initialBalance;
+    final hasDelta = account.initialBalance != account.balance && account.initialBalance != 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color, dark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // ── Card body ──────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top: icon + name + bank + type
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(_iconData(account.icon), color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(account.name,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16)),
+                          if (account.bankName.isNotEmpty)
+                            Text(account.bankName,
+                                style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                    fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(account.typeLabel,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Balance
+                Text('Saldo Saat Ini',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.65), fontSize: 12)),
+                const SizedBox(height: 4),
+                Text(
+                  CurrencyFormatter.format(account.balance),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5),
+                ),
+                if (hasDelta) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        delta >= 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                        size: 11,
+                        color: delta >= 0 ? Colors.greenAccent.shade200 : Colors.redAccent.shade100,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${_formatDelta(delta)} dari saldo awal',
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.6), fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // ── Action row ─────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.12),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+            ),
+            child: Row(
+              children: [
+                _ActionButton(
+                  label: 'Set Saldo',
+                  icon: Icons.edit_rounded,
+                  onTap: onSetBalance,
+                  isFirst: true,
+                ),
+                Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.15)),
+                _ActionButton(
+                  label: 'Edit Info',
+                  icon: Icons.tune_rounded,
+                  onTap: onEdit,
+                ),
+                Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.15)),
+                _ActionButton(
+                  label: 'Hapus',
+                  icon: Icons.delete_outline_rounded,
+                  onTap: onDelete,
+                  isDestructive: true,
+                  isLast: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isDestructive;
+  final bool isFirst;
+  final bool isLast;
+
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.isDestructive = false,
+    this.isFirst = false,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDestructive ? Colors.redAccent.shade100 : Colors.white;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.only(
+          bottomLeft: isFirst ? const Radius.circular(20) : Radius.zero,
+          bottomRight: isLast ? const Radius.circular(20) : Radius.zero,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: color.withValues(alpha: 0.85)),
+              const SizedBox(width: 5),
+              Text(label,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

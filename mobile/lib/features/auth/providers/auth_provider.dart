@@ -90,6 +90,13 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> forceUnauthenticated() async {
+    await SecureStorage.clear();
+    _user = null;
+    _status = AuthStatus.unauthenticated;
+    notifyListeners();
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();

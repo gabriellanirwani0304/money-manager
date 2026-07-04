@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/budget_provider.dart';
 import '../models/budget_models.dart';
@@ -102,32 +103,11 @@ class _BudgetScreenState extends State<BudgetScreen> {
   }
 
   Widget _buildEmpty(BuildContext context, BudgetProvider p) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: AppColors.warning.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.savings_outlined, size: 48, color: AppColors.warning),
-          ),
-          const SizedBox(height: 20),
-          const Text('Belum ada budget', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          const Text('Set budget per kategori agar keuanganmu terkontrol',
-              style: TextStyle(color: AppColors.textSecondary), textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => _showAddDialog(context),
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Set Budget Pertama'),
-          ),
-        ],
-      ),
+    return const EmptyState(
+      emoji: '🎯',
+      title: 'Belum ada budget',
+      subtitle: 'Set budget per kategori agar pengeluaranmu terkontrol dan tidak bocor',
+      color: AppColors.warning,
     );
   }
 
@@ -459,9 +439,9 @@ class _AddBudgetSheetState extends State<_AddBudgetSheet> {
           TextFormField(
             controller: _amountCtrl,
             keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: const InputDecoration(
               labelText: 'Nominal Budget',
-              prefixIcon: Icon(Icons.attach_money_rounded, color: AppColors.primary),
               prefixText: 'Rp ',
             ),
           ),
