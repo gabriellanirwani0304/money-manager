@@ -17,3 +17,8 @@ INSERT INTO categories (name, type, icon, color, is_default) VALUES
 ('Cicilan',     'expense', '💳', '#DC2626', TRUE),
 ('Lainnya',     'expense', '📦', '#6B7280', TRUE)
 ON CONFLICT DO NOTHING;
+
+-- Default admin user (password: admin123)
+INSERT INTO users (name, email, password_hash)
+VALUES ('Admin', 'admin@admin.com', '$2a$12$3tEVvq621Vp.LQs7IuekXeUvv5QlrpqlCAROYu6mVZ5tA2/4TyveC')
+ON CONFLICT (email) DO NOTHING;
