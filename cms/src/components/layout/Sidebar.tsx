@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '@/context/ThemeContext'
 import { THEMES } from '@/lib/themes'
+import MoneyMateLogo from '@/components/shared/MoneyMateLogo'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -37,9 +38,12 @@ export default function Sidebar() {
 
   return (
     <aside className="flex h-screen w-56 flex-col border-r bg-card px-3 py-4">
-      <div className="mb-4 px-2">
-        <h1 className="text-lg font-bold">MoneyMate CMS</h1>
-        <p className="text-xs text-muted-foreground">Admin Panel</p>
+      <div className="mb-4 px-2 flex items-center gap-3">
+        <MoneyMateLogo size={38} />
+        <div>
+          <h1 className="text-sm font-bold leading-tight">MoneyMate</h1>
+          <p className="text-xs text-muted-foreground">Admin Panel</p>
+        </div>
       </div>
       <Separator className="mb-3" />
       <nav className="flex flex-1 flex-col gap-1">

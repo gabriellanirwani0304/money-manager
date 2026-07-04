@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
@@ -68,21 +69,26 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   const SizedBox(height: 24),
                   // Logo
                   Container(
-                    width: 80,
-                    height: 80,
+                    width: 88,
+                    height: 88,
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(26),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.account_balance_wallet_rounded,
-                        size: 44, color: AppColors.primary),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(26),
+                      child: SvgPicture.asset(
+                        'assets/images/logo.svg',
+                        width: 88,
+                        height: 88,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   const Text(

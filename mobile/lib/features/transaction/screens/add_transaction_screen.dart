@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/transaction_provider.dart';
 import '../models/transaction_models.dart';
@@ -22,7 +23,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
   final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _catSearchCtrl = TextEditingController();
 
   String _type = 'expense';
   String? _selectedCategoryId;
@@ -30,7 +30,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
   String? _selectedToAccountId;
   DateTime _selectedDate = DateTime.now();
   bool _submitting = false;
-  String _catSearch = '';
 
   bool get isEditing => widget.existing != null;
   bool get isTransfer => _type == 'transfer';
@@ -46,8 +45,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
         setState(() {
           _type = _types[_tabCtrl.index];
           _selectedCategoryId = null;
-          _catSearch = '';
-          _catSearchCtrl.clear();
         });
         if (!isTransfer) {
           context.read<TransactionProvider>().loadCategories(type: _type);
@@ -80,7 +77,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
     _tabCtrl.dispose();
     _amountCtrl.dispose();
     _descCtrl.dispose();
-    _catSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -168,6 +164,381 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
     }
   }
 
+  void _showCategorySheet(List categories) {
+    final searchCtrl = TextEditingController();
+    String query = '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final filtered = query.isEmpty
+              ? categories
+              : categories
+                  .where((c) =>
+                      c.name.toLowerCase().contains(query.toLowerCase()))
+                  .toList();
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.65,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Pilih Kategori',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                // Search bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: searchCtrl,
+                    autofocus: true,
+                    onChanged: (v) => setSheetState(() => query = v),
+                    decoration: InputDecoration(
+                      hintText: 'Cari kategori...',
+                      prefixIcon: const Icon(Icons.search_rounded,
+                          size: 20, color: AppColors.textHint),
+                      suffixIcon: query.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: () {
+                                searchCtrl.clear();
+                                setSheetState(() => query = '');
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // List
+                Expanded(
+                  child: filtered.isEmpty
+                      ? Center(
+                          child: Text('Tidak ada "$query"',
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary)))
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) {
+                            final cat = filtered[i];
+                            final catColor = _parseColor(cat.color);
+                            final isSelected = _selectedCategoryId == cat.id;
+
+                            return ListTile(
+                              onTap: () {
+                                setState(() => _selectedCategoryId = cat.id);
+                                Navigator.pop(context);
+                              },
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              tileColor: isSelected
+                                  ? catColor.withValues(alpha: 0.08)
+                                  : null,
+                              leading: Container(
+                                width: 44, height: 44,
+                                decoration: BoxDecoration(
+                                  color: catColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(cat.icon,
+                                    style: const TextStyle(fontSize: 22)),
+                              ),
+                              title: Text(cat.name,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                      color: isSelected
+                                          ? catColor
+                                          : AppColors.textPrimary)),
+                              trailing: isSelected
+                                  ? Icon(Icons.check_circle_rounded,
+                                      color: catColor, size: 22)
+                                  : null,
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAccountField({
+    required dynamic account,
+    required String placeholder,
+    required bool allowNone,
+    required VoidCallback onTap,
+  }) {
+    final isNone = account == null && !allowNone;
+    final accColor = account?.parsedColor ?? AppColors.primary;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: account != null
+              ? accColor.withValues(alpha: 0.08)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: account != null
+                ? accColor.withValues(alpha: 0.4)
+                : AppColors.divider,
+          ),
+        ),
+        child: Row(
+          children: [
+            if (account != null) ...[
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: accColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(_accountIconData(account.icon), color: accColor, size: 16),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(account.name,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                            color: accColor)),
+                    Text(CurrencyFormatter.compact(account.balance),
+                        style: TextStyle(fontSize: 12, color: accColor.withValues(alpha: 0.7))),
+                  ],
+                ),
+              ),
+            ] else ...[
+              const Icon(Icons.account_balance_wallet_outlined,
+                  size: 20, color: AppColors.textHint),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(placeholder,
+                    style: const TextStyle(
+                        color: AppColors.textHint, fontSize: 15)),
+              ),
+            ],
+            Icon(Icons.keyboard_arrow_down_rounded,
+                color: account != null ? accColor : AppColors.textHint),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAccountSheet({
+    required List accounts,
+    required String title,
+    required bool allowNone,
+    required String? excludeId,
+    required void Function(String? id) onSelect,
+  }) {
+    final searchCtrl = TextEditingController();
+    String query = '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final filtered = accounts
+              .where((a) =>
+                  a.id != excludeId &&
+                  (query.isEmpty ||
+                      a.name.toLowerCase().contains(query.toLowerCase())))
+              .toList();
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.6,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 12),
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(title,
+                        style: const TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: searchCtrl,
+                    autofocus: true,
+                    onChanged: (v) => setSheetState(() => query = v),
+                    decoration: InputDecoration(
+                      hintText: 'Cari rekening...',
+                      prefixIcon: const Icon(Icons.search_rounded,
+                          size: 20, color: AppColors.textHint),
+                      suffixIcon: query.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                              onPressed: () {
+                                searchCtrl.clear();
+                                setSheetState(() => query = '');
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 4),
+                    children: [
+                      if (allowNone)
+                        ListTile(
+                          onTap: () {
+                            onSelect(null);
+                            Navigator.pop(context);
+                          },
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          tileColor: _selectedAccountId == null
+                              ? AppColors.primary.withValues(alpha: 0.08)
+                              : null,
+                          leading: Container(
+                            width: 44, height: 44,
+                            decoration: BoxDecoration(
+                              color: AppColors.divider,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.money_off_rounded,
+                                color: AppColors.textSecondary, size: 22),
+                          ),
+                          title: const Text('Tidak ada rekening',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 15)),
+                          subtitle: const Text('Tidak terhubung ke rekening',
+                              style: TextStyle(fontSize: 12)),
+                          trailing: _selectedAccountId == null
+                              ? const Icon(Icons.check_circle_rounded,
+                                  color: AppColors.primary, size: 22)
+                              : null,
+                        ),
+                      ...filtered.map((acc) {
+                        final accColor = acc.parsedColor;
+                        final isSelected = _selectedAccountId == acc.id ||
+                            _selectedToAccountId == acc.id;
+
+                        return ListTile(
+                          onTap: () {
+                            onSelect(acc.id);
+                            Navigator.pop(context);
+                          },
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          tileColor: isSelected
+                              ? accColor.withValues(alpha: 0.08)
+                              : null,
+                          leading: Container(
+                            width: 44, height: 44,
+                            decoration: BoxDecoration(
+                              color: accColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(_accountIconData(acc.icon),
+                                color: accColor, size: 22),
+                          ),
+                          title: Text(acc.name,
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                  color: isSelected
+                                      ? accColor
+                                      : AppColors.textPrimary)),
+                          subtitle: Text(
+                              CurrencyFormatter.format(acc.balance),
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: accColor,
+                                  fontWeight: FontWeight.w600)),
+                          trailing: isSelected
+                              ? Icon(Icons.check_circle_rounded,
+                                  color: accColor, size: 22)
+                              : null,
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isExpense = _type == 'expense';
@@ -218,13 +589,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                     ),
                     child: TabBar(
                       controller: _tabCtrl,
+                      padding: const EdgeInsets.all(4),
                       indicator: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      dividerColor: Colors.transparent,
                       labelColor: color,
                       unselectedLabelColor: Colors.white,
                       labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                      overlayColor: WidgetStateProperty.all(Colors.transparent),
                       tabs: const [
                         Tab(text: '📉 Keluar'),
                         Tab(text: '📈 Masuk'),
@@ -241,18 +616,41 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                   children: [
                     const Text('Nominal', style: TextStyle(color: Colors.white70, fontSize: 13)),
                     const SizedBox(height: 4),
-                    TextField(
-                      controller: _amountCtrl,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        hintText: '0',
-                        hintStyle: TextStyle(color: Colors.white38, fontSize: 36),
-                        prefixText: 'Rp ',
-                        prefixStyle: TextStyle(color: Colors.white60, fontSize: 22, fontWeight: FontWeight.w600),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Rp',
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 22, fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: TextField(
+                              controller: _amountCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: false),
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              textAlign: TextAlign.left,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800),
+                              decoration: InputDecoration(
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                filled: true,
+                                fillColor: Colors.transparent,
+                                hintText: '0',
+                                hintStyle: const TextStyle(color: Colors.white38, fontSize: 36),
+                                isDense: true,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -282,99 +680,59 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                             const SizedBox(height: 10),
                             Consumer<TransactionProvider>(
                               builder: (_, p, __) {
-                                final allCats = p.categories;
-                                if (allCats.isEmpty) {
-                                  return const Center(
-                                      child: CircularProgressIndicator(color: AppColors.primary));
-                                }
-                                final cats = _catSearch.isEmpty
-                                    ? allCats
-                                    : allCats.where((c) =>
-                                        c.name.toLowerCase().contains(_catSearch.toLowerCase())).toList();
+                                final selected = p.categories
+                                    .where((c) => c.id == _selectedCategoryId)
+                                    .firstOrNull;
+                                final selColor = selected != null
+                                    ? _parseColor(selected.color)
+                                    : AppColors.primary;
 
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Search field
-                                    TextField(
-                                      controller: _catSearchCtrl,
-                                      onChanged: (v) => setState(() => _catSearch = v),
-                                      decoration: InputDecoration(
-                                        hintText: 'Cari kategori...',
-                                        hintStyle: const TextStyle(fontSize: 13),
-                                        prefixIcon: const Icon(Icons.search_rounded,
-                                            size: 18, color: AppColors.textHint),
-                                        suffixIcon: _catSearch.isNotEmpty
-                                            ? IconButton(
-                                                icon: const Icon(Icons.close_rounded, size: 16),
-                                                onPressed: () => setState(() {
-                                                  _catSearch = '';
-                                                  _catSearchCtrl.clear();
-                                                }),
-                                              )
-                                            : null,
-                                        contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 10),
-                                        isDense: true,
+                                return GestureDetector(
+                                  onTap: () => _showCategorySheet(p.categories),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      color: selected != null
+                                          ? selColor.withValues(alpha: 0.08)
+                                          : AppColors.surface,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: selected != null
+                                            ? selColor.withValues(alpha: 0.4)
+                                            : AppColors.divider,
                                       ),
                                     ),
-                                    const SizedBox(height: 10),
-                                    if (cats.isEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 8),
-                                        child: Text('Tidak ditemukan "$_catSearch"',
-                                            style: const TextStyle(
-                                                color: AppColors.textSecondary, fontSize: 13)),
-                                      )
-                                    else
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: cats.map((cat) {
-                                          final selected = _selectedCategoryId == cat.id;
-                                          final catColor = _parseColor(cat.color);
-                                          return GestureDetector(
-                                            onTap: () => setState(() => _selectedCategoryId = cat.id),
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 180),
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 12, vertical: 8),
-                                              decoration: BoxDecoration(
-                                                color: selected
-                                                    ? catColor.withValues(alpha: 0.15)
-                                                    : Colors.white,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: selected ? catColor : AppColors.divider,
-                                                  width: selected ? 2 : 1,
-                                                ),
-                                                boxShadow: selected
-                                                    ? [BoxShadow(
-                                                        color: catColor.withValues(alpha: 0.2),
-                                                        blurRadius: 8)]
-                                                    : null,
-                                              ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  CategoryIconWidget(
-                                                      icon: cat.icon, color: cat.color, size: 28),
-                                                  const SizedBox(width: 6),
-                                                  Text(
-                                                    cat.name,
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: selected ? catColor : AppColors.textPrimary,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        }).toList(),
-                                      ),
-                                  ],
+                                    child: Row(
+                                      children: [
+                                        if (selected != null) ...[
+                                          Text(selected.icon,
+                                              style: const TextStyle(fontSize: 22)),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(selected.name,
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 15,
+                                                    color: selColor)),
+                                          ),
+                                        ] else ...[
+                                          const Icon(Icons.grid_view_rounded,
+                                              size: 20, color: AppColors.textHint),
+                                          const SizedBox(width: 12),
+                                          const Expanded(
+                                            child: Text('Pilih kategori...',
+                                                style: TextStyle(
+                                                    color: AppColors.textHint, fontSize: 15)),
+                                          ),
+                                        ],
+                                        Icon(Icons.keyboard_arrow_down_rounded,
+                                            color: selected != null
+                                                ? selColor
+                                                : AppColors.textHint),
+                                      ],
+                                    ),
+                                  ),
                                 );
                               },
                             ),
@@ -386,6 +744,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                           Consumer<AccountProvider>(
                             builder: (_, accP, __) {
                               if (accP.accounts.isEmpty) return const SizedBox();
+                              final fromAcc = accP.accounts
+                                  .where((a) => a.id == _selectedAccountId)
+                                  .firstOrNull;
+                              final toAcc = accP.accounts
+                                  .where((a) => a.id == _selectedToAccountId)
+                                  .firstOrNull;
+
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -399,82 +764,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                                     ],
                                   ]),
                                   const SizedBox(height: 8),
-                                  SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: Row(
-                                      children: [
-                                        if (!isTransfer)
-                                          GestureDetector(
-                                            onTap: () => setState(() => _selectedAccountId = null),
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 200),
-                                              margin: const EdgeInsets.only(right: 8),
-                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                              decoration: BoxDecoration(
-                                                color: _selectedAccountId == null
-                                                    ? AppColors.primary.withOpacity(0.12)
-                                                    : Colors.white,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: _selectedAccountId == null
-                                                      ? AppColors.primary : AppColors.divider,
-                                                  width: _selectedAccountId == null ? 2 : 1,
-                                                ),
-                                              ),
-                                              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                                Icon(Icons.money_off_rounded,
-                                                    color: _selectedAccountId == null
-                                                        ? AppColors.primary : AppColors.textHint,
-                                                    size: 18),
-                                                const SizedBox(width: 6),
-                                                Text('Tidak ada',
-                                                    style: TextStyle(
-                                                        fontSize: 13, fontWeight: FontWeight.w600,
-                                                        color: _selectedAccountId == null
-                                                            ? AppColors.primary : AppColors.textPrimary)),
-                                              ]),
-                                            ),
-                                          ),
-                                        ...accP.accounts.map((acc) {
-                                          final selected = _selectedAccountId == acc.id;
-                                          final accColor = acc.parsedColor;
-                                          return GestureDetector(
-                                            onTap: () => setState(() => _selectedAccountId = acc.id),
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 200),
-                                              margin: const EdgeInsets.only(right: 8),
-                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                              decoration: BoxDecoration(
-                                                color: selected ? accColor.withOpacity(0.12) : Colors.white,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: selected ? accColor : AppColors.divider,
-                                                  width: selected ? 2 : 1,
-                                                ),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Row(mainAxisSize: MainAxisSize.min, children: [
-                                                    Icon(_accountIconData(acc.icon), color: accColor, size: 16),
-                                                    const SizedBox(width: 6),
-                                                    Text(acc.name,
-                                                        style: TextStyle(
-                                                            fontSize: 13, fontWeight: FontWeight.w600,
-                                                            color: selected ? accColor : AppColors.textPrimary)),
-                                                  ]),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    CurrencyFormatter.compact(acc.balance),
-                                                    style: TextStyle(
-                                                        fontSize: 11, color: accColor, fontWeight: FontWeight.w600),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        }),
-                                      ],
+                                  _buildAccountField(
+                                    account: fromAcc,
+                                    placeholder: isTransfer ? 'Pilih rekening asal...' : 'Pilih rekening...',
+                                    allowNone: !isTransfer,
+                                    onTap: () => _showAccountSheet(
+                                      accounts: accP.accounts,
+                                      title: isTransfer ? 'Dari Rekening' : 'Pilih Rekening',
+                                      allowNone: !isTransfer,
+                                      excludeId: null,
+                                      onSelect: (id) => setState(() => _selectedAccountId = id),
                                     ),
                                   ),
                                   if (_selectedAccountId != null && !isTransfer) ...[
@@ -493,54 +792,35 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
 
                                   // To Account (transfer only)
                                   if (isTransfer) ...[
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 12),
+                                    Row(children: [
+                                      const Expanded(child: Divider()),
+                                      Container(
+                                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primary.withOpacity(0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.arrow_downward_rounded,
+                                            size: 16, color: AppColors.primary),
+                                      ),
+                                      const Expanded(child: Divider()),
+                                    ]),
+                                    const SizedBox(height: 12),
                                     const Text('Ke Rekening',
                                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                                     const SizedBox(height: 8),
-                                    SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      child: Row(
-                                        children: accP.accounts
-                                            .where((a) => a.id != _selectedAccountId)
-                                            .map((acc) {
-                                          final selected = _selectedToAccountId == acc.id;
-                                          final accColor = acc.parsedColor;
-                                          return GestureDetector(
-                                            onTap: () => setState(() => _selectedToAccountId = acc.id),
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 200),
-                                              margin: const EdgeInsets.only(right: 8),
-                                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                              decoration: BoxDecoration(
-                                                color: selected ? accColor.withOpacity(0.12) : Colors.white,
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: selected ? accColor : AppColors.divider,
-                                                  width: selected ? 2 : 1,
-                                                ),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Row(mainAxisSize: MainAxisSize.min, children: [
-                                                    Icon(_accountIconData(acc.icon), color: accColor, size: 16),
-                                                    const SizedBox(width: 6),
-                                                    Text(acc.name,
-                                                        style: TextStyle(
-                                                            fontSize: 13, fontWeight: FontWeight.w600,
-                                                            color: selected ? accColor : AppColors.textPrimary)),
-                                                  ]),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    CurrencyFormatter.compact(acc.balance),
-                                                    style: TextStyle(
-                                                        fontSize: 11, color: accColor, fontWeight: FontWeight.w600),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        }).toList(),
+                                    _buildAccountField(
+                                      account: toAcc,
+                                      placeholder: 'Pilih rekening tujuan...',
+                                      allowNone: false,
+                                      onTap: () => _showAccountSheet(
+                                        accounts: accP.accounts,
+                                        title: 'Ke Rekening',
+                                        allowNone: false,
+                                        excludeId: _selectedAccountId,
+                                        onSelect: (id) => setState(() => _selectedToAccountId = id),
                                       ),
                                     ),
                                     if (_selectedAccountId != null && _selectedToAccountId != null) ...[
@@ -563,10 +843,29 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
                           const SizedBox(height: 8),
                           TextFormField(
                             controller: _descCtrl,
-                            maxLines: 2,
-                            decoration: const InputDecoration(
+                            maxLines: 3,
+                            minLines: 2,
+                            decoration: InputDecoration(
                               hintText: 'Tulis catatan...',
-                              prefixIcon: Icon(Icons.notes_rounded, color: AppColors.primary),
+                              hintStyle: const TextStyle(
+                                  color: AppColors.textHint, fontSize: 14),
+                              filled: true,
+                              fillColor: AppColors.background,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 14),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(
+                                    color: AppColors.primary, width: 1.5),
+                              ),
                             ),
                           ),
 

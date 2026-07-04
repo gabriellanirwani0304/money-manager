@@ -74,6 +74,7 @@ class _CategoryScreenState extends State<CategoryScreen>
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_category',
         onPressed: () {
           final type = _tabCtrl.index == 0 ? 'expense' : 'income';
           _showForm(context, type: type);
@@ -282,22 +283,12 @@ class _CategoryList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (categories.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.category_outlined, size: 64, color: AppColors.textHint),
-            const SizedBox(height: 12),
-            const Text('Belum ada kategori custom',
-                style: TextStyle(color: AppColors.textSecondary)),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Tambah Kategori'),
-            ),
-          ],
-        ),
+      return EmptyState(
+        emoji: '🗂️',
+        title: 'Belum ada kategori custom',
+        subtitle: 'Buat kategori sendiri untuk menyesuaikan pencatatan keuanganmu',
+        actionLabel: 'Tambah Kategori',
+        onAction: onAdd,
       );
     }
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import MoneyMateLogo from '@/components/shared/MoneyMateLogo'
 
 export default function LoginPage() {
   const { isLoggedIn, login, loading, error } = useAuth()
@@ -24,6 +25,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
+          <div className="flex justify-center mb-3">
+            <MoneyMateLogo size={64} />
+          </div>
           <CardTitle className="text-2xl">MoneyMate CMS</CardTitle>
           <CardDescription>Masuk ke panel admin</CardDescription>
         </CardHeader>

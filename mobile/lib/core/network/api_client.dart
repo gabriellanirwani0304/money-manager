@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../constants/api_constants.dart';
 import '../storage/secure_storage.dart';
+import 'session_manager.dart';
 
 class ApiClient {
   ApiClient._();
@@ -64,6 +65,8 @@ class _AuthInterceptor extends Interceptor {
       } catch (_) {
         await SecureStorage.clear();
         _isRefreshing = false;
+        SessionManager.triggerExpired();
+        return;
       }
     }
     handler.next(err);
