@@ -125,13 +125,19 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [
-    DashboardScreen(),
-    AccountScreen(),
-    TransactionListScreen(),
-    BudgetScreen(),
-    ReportScreen(),
-  ];
+  late final List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      DashboardScreen(onNavigateTo: (i) => setState(() => _currentIndex = i)),
+      const AccountScreen(),
+      const TransactionListScreen(),
+      const BudgetScreen(),
+      const ReportScreen(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
