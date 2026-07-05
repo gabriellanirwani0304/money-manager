@@ -213,9 +213,11 @@ class _SummaryTab extends StatelessWidget {
                 children: [
                   const SectionHeader(title: '📊 Tren 6 Bulan'),
                   const SizedBox(height: 16),
-                  SizedBox(
-                    height: 180,
-                    child: _BarChart(trends: provider.trends),
+                  ClipRect(
+                    child: SizedBox(
+                      height: 180,
+                      child: _BarChart(trends: provider.trends),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -321,7 +323,10 @@ class _BarChart extends StatelessWidget {
     return BarChart(
       BarChartData(
         alignment: BarChartAlignment.spaceAround,
-        maxY: trends.fold(0.0, (m, t) => m > t.income ? m : (m > t.expense ? m : t.income)) * 1.2,
+        maxY: trends.isEmpty ? 100 : trends.fold(0.0, (m, t) {
+          final largest = t.income > t.expense ? t.income : t.expense;
+          return m > largest ? m : largest;
+        }) * 1.2,
         barTouchData: BarTouchData(enabled: false),
         titlesData: FlTitlesData(
           leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
