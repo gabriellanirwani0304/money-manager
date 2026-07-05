@@ -16,6 +16,7 @@ services:
       - ./backend/migrations/001_init.sql:/docker-entrypoint-initdb.d/01_init.sql
       - ./backend/migrations/002_seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
       - ./backend/migrations/003_accounts.sql:/docker-entrypoint-initdb.d/03_accounts.sql
+      - ./backend/migrations/004_transfer.sql:/docker-entrypoint-initdb.d/04_transfer.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-moneyuser} -d ${DB_NAME:-moneymanager}"]
       interval: 5s

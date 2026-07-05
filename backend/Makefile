@@ -10,6 +10,7 @@ migrate:
 	psql "$$DATABASE_URL" -f migrations/001_init.sql
 	psql "$$DATABASE_URL" -f migrations/002_seed.sql
 	psql "$$DATABASE_URL" -f migrations/003_accounts.sql
+	psql "$$DATABASE_URL" -f migrations/004_transfer.sql
 
 seed-categories:
 	psql "$$DATABASE_URL" -f migrations/002_seed.sql
