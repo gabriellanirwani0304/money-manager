@@ -129,8 +129,42 @@ export default function TransactionsPage() {
   const [filterType, setFilterType] = useState<string>('')
   const [filterCategory, setFilterCategory] = useState<string>('')
   const [filterAccount, setFilterAccount] = useState<string>('')
-  const [filterStart, setFilterStart] = useState<string>('')
-  const [filterEnd, setFilterEnd] = useState<string>('')
+
+  const today = () => {
+    const n = new Date()
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+  }
+  const thisMonthStart = () => {
+    const n = new Date()
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-01`
+  }
+  const thisMonthEnd = () => {
+    const n = new Date()
+    const last = new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate()
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`
+  }
+
+  const [filterStart, setFilterStart] = useState<string>(thisMonthStart)
+  const [filterEnd, setFilterEnd] = useState<string>(today)
+  const [filterWeek, setFilterWeek] = useState<string>('')
+
+  const weekOptions = useMemo(() => {
+    const d = filterStart ? new Date(filterStart + 'T00:00:00') : new Date()
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    const lastDay = new Date(y, m + 1, 0).getDate()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const weeks: { label: string; start: string; end: string }[] = []
+    for (let s = 1; s <= lastDay; s += 7) {
+      const e = Math.min(s + 6, lastDay)
+      weeks.push({
+        label: `Minggu ${weeks.length + 1} (${s}–${e})`,
+        start: `${y}-${pad(m + 1)}-${pad(s)}`,
+        end: `${y}-${pad(m + 1)}-${pad(e)}`,
+      })
+    }
+    return weeks
+  }, [filterStart])
 
   const [sortBy, setSortBy] = useState<SortKey>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -164,15 +198,36 @@ export default function TransactionsPage() {
     setFilterType('')
     setFilterCategory('')
     setFilterAccount('')
-    setFilterStart('')
-    setFilterEnd('')
+    setFilterWeek('')
+    const start = thisMonthStart()
+    const end = today()
+    setFilterStart(start)
+    setFilterEnd(end)
     setPage(1)
-    listTransactions({ page: 1, limit })
+    listTransactions({ page: 1, limit, start_date: start, end_date: end })
       .then((r) => {
         setItems(r.data.data.transactions ?? [])
         setTotal(r.data.data.pagination?.total ?? 0)
       })
       .catch(() => {})
+  }
+
+  const selectWeek = (idx: string) => {
+    setFilterWeek(idx)
+    const w = idx ? weekOptions[Number(idx) - 1] : null
+    const start = w ? w.start : thisMonthStart()
+    const end = w ? w.end : thisMonthEnd()
+    setFilterStart(start)
+    setFilterEnd(end)
+    setPage(1)
+    load({
+      page: 1, limit,
+      start_date: start,
+      end_date: end,
+      ...(filterType ? { type: filterType } : {}),
+      ...(filterCategory ? { category_id: filterCategory } : {}),
+      ...(filterAccount ? { account_id: filterAccount } : {}),
+    })
   }
 
   useEffect(() => { load(buildFilter(page)) }, [page])
@@ -467,12 +522,24 @@ export default function TransactionsPage() {
           />
         </div>
 
-        <DateInput value={filterStart} onChange={setFilterStart} className="w-36" />
+        <DateInput value={filterStart} onChange={v => { setFilterStart(v); setFilterWeek('') }} className="w-36" />
         <span className="text-xs text-muted-foreground">s/d</span>
-        <DateInput value={filterEnd} onChange={setFilterEnd} className="w-36" />
+        <DateInput value={filterEnd} onChange={v => { setFilterEnd(v); setFilterWeek('') }} className="w-36" />
+
+        <Select value={filterWeek} onValueChange={selectWeek}>
+          <SelectTrigger className="w-44">
+            <SelectValue>{filterWeek ? weekOptions[Number(filterWeek) - 1]?.label : 'Semua Minggu'}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Semua Minggu</SelectItem>
+            {weekOptions.map((w, i) => (
+              <SelectItem key={i} value={String(i + 1)}>{w.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Button size="sm" onClick={() => applyFilter(1)}>Terapkan</Button>
-        {(filterType || filterCategory || filterAccount || filterStart || filterEnd) && (
+        {(filterType || filterCategory || filterAccount || filterWeek) && (
           <Button size="sm" variant="ghost" onClick={resetFilter}>Reset</Button>
         )}
       </div>
@@ -637,6 +704,7 @@ export default function TransactionsPage() {
               onChange={setForm}
               categories={categories}
               accounts={accounts}
+              hideDate={bulkMode && !editing}
               onQuickCat={(type) => {
                 setQuickCatForm({ name: '', type, icon: '' })
                 setQuickCatOpen(true)

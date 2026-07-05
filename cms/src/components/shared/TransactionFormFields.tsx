@@ -34,9 +34,10 @@ interface Props {
   categories: Category[]
   accounts: Account[]
   onQuickCat?: (type: 'income' | 'expense') => void
+  hideDate?: boolean
 }
 
-export function TransactionFormFields({ value, onChange, categories, accounts, onQuickCat }: Props) {
+export function TransactionFormFields({ value, onChange, categories, accounts, onQuickCat, hideDate }: Props) {
   const set = (patch: Partial<TxFormData>) => {
     const next = { ...value, ...patch }
     if (patch.type && patch.type !== value.type) {
@@ -67,10 +68,12 @@ export function TransactionFormFields({ value, onChange, categories, accounts, o
       </div>
 
       {/* Date */}
-      <div className="space-y-1">
-        <Label>Tanggal</Label>
-        <DateInput value={value.date} onChange={(v) => set({ date: v })} />
-      </div>
+      {!hideDate && (
+        <div className="space-y-1">
+          <Label>Tanggal</Label>
+          <DateInput value={value.date} onChange={(v) => set({ date: v })} />
+        </div>
+      )}
 
       {/* Category */}
       {!isTransfer && (

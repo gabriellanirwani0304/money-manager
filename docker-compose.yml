@@ -22,6 +22,16 @@ services:
       timeout: 5s
       retries: 10
 
+  adminer:
+    image: adminer:latest
+    container_name: money-manager-adminer
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
   backend:
     build:
       context: ./backend

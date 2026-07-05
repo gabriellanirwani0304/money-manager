@@ -26,8 +26,10 @@ export function SearchableSelect({
 }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [highlighted, setHighlighted] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
 
   const selected = value ? options.find(o => o.value === value) : null
 
@@ -35,10 +37,16 @@ export function SearchableSelect({
     ? options.filter(o => o.label.toLowerCase().includes(query.toLowerCase()))
     : options
 
+  const listOptions: SelectOption[] = [
+    ...(allowEmpty && !query ? [{ value: '', label: emptyLabel }] : []),
+    ...filtered,
+  ]
+
   useEffect(() => {
     if (!open) { setQuery(''); return }
     setTimeout(() => inputRef.current?.focus(), 50)
   }, [open])
+
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -49,6 +57,54 @@ export function SearchableSelect({
   }, [])
 
   const select = (v: string) => { onChange(v); setOpen(false); setQuery('') }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlighted(h => {
+        const next = Math.min(h + 1, listOptions.length - 1)
+        listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' })
+        return next
+      })
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlighted(h => {
+        const next = Math.max(h - 1, 0)
+        listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' })
+        return next
+      })
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const opt = listOptions[highlighted]
+      if (opt) {
+        select(opt.value)
+        setTimeout(() => {
+          const focusable = Array.from(document.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          ))
+          const trigger = ref.current?.querySelector<HTMLElement>('button')
+          if (!trigger) return
+          const idx = focusable.indexOf(trigger)
+          focusable[idx + 1]?.focus()
+        }, 0)
+      }
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+    } else if (e.key === 'Tab') {
+      e.preventDefault()
+      setOpen(false)
+      setTimeout(() => {
+        const focusable = Array.from(document.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ))
+        const trigger = ref.current?.querySelector<HTMLElement>('button')
+        if (!trigger) return
+        const idx = focusable.indexOf(trigger)
+        const target = e.shiftKey ? focusable[idx - 1] : focusable[idx + 1]
+        target?.focus()
+      }, 0)
+    }
+  }
 
   const triggerLabel = selected
     ? `${selected.icon ? selected.icon + ' ' : ''}${selected.label}`
@@ -75,28 +131,23 @@ export function SearchableSelect({
             <input
               ref={inputRef}
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={e => { setQuery(e.target.value); setHighlighted(0) }}
+              onKeyDown={handleKeyDown}
               placeholder="Cari..."
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
             />
           </div>
-          <ul className="max-h-52 overflow-y-auto py-1">
-            {allowEmpty && !query && (
-              <li
-                onClick={() => select('')}
-                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground text-muted-foreground"
-              >
-                <span className="w-4 shrink-0">{value === '' && <Check size={13} className="text-primary" />}</span>
-                <span>{emptyLabel}</span>
-              </li>
-            )}
-            {filtered.length === 0 ? (
+          <ul ref={listRef} className="max-h-52 overflow-y-auto py-1">
+            {listOptions.length === 0 ? (
               <li className="px-3 py-2 text-sm text-muted-foreground text-center">Tidak ditemukan</li>
-            ) : filtered.map(o => (
+            ) : listOptions.map((o, idx) => (
               <li
                 key={o.value}
                 onClick={() => select(o.value)}
-                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                onMouseEnter={() => setHighlighted(idx)}
+                className={`flex cursor-pointer items-center gap-2 px-3 py-2 text-sm ${
+                  idx === highlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground'
+                } ${o.value === '' ? 'text-muted-foreground' : ''}`}
               >
                 <span className="w-4 shrink-0">{o.value === value && <Check size={13} className="text-primary" />}</span>
                 {o.icon && <span>{o.icon}</span>}

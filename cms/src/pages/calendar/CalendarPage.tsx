@@ -29,6 +29,8 @@ export default function CalendarPage() {
   const cellBase = theme === 'sakura' ? 'oklch(1 0 0)' : 'var(--card)'
 
   const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
 
@@ -36,7 +38,7 @@ export default function CalendarPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [filterAccount, setFilterAccount] = useState<string>('')
   const [filterType, setFilterType] = useState<string>('')
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(todayStr)
   const [loading, setLoading] = useState(false)
 
   const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`
@@ -49,7 +51,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     setLoading(true)
-    setSelected(null)
+    setSelected(year === now.getFullYear() && month === now.getMonth() ? todayStr : null)
     listTransactions({ start_date: startDate, end_date: endDate, limit: 500 })
       .then(r => setAllTxs(r.data.data.transactions ?? []))
       .catch(() => {})
@@ -94,7 +96,6 @@ export default function CalendarPage() {
     return d >= 1 && d <= lastDay ? d : null
   })
   const weeks = Math.ceil(totalCells / 7)
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
 
   const selectedTxs = selected ? filteredTxs.filter(t => t.date.slice(0, 10) === selected) : []
   const selectedData = selected ? txMap[selected] : null
@@ -197,19 +198,22 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {/* Main layout: calendar left, stats right */}
+      <div className="flex gap-4 items-start">
+      <div className="w-[65%] shrink-0 space-y-0.5">
+
       {/* Day header — 7 cols + 1 for week total */}
-      <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(7, 1fr) 48px' }}>
+      <div className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(7, 1fr) 36px' }}>
         {DAY_NAMES.map((d, i) => (
-          <div key={d} className={`text-center text-xs font-semibold py-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{d}</div>
+          <div key={d} className={`text-center text-xs font-semibold py-0.5 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{d}</div>
         ))}
-        <div className="text-center text-xs font-semibold py-1 text-muted-foreground/50">W</div>
+        <div className="text-center text-xs font-semibold py-0.5 text-muted-foreground/50">W</div>
       </div>
 
       {/* Calendar grid + week totals */}
-      <div className={`space-y-1 ${loading ? 'opacity-50' : ''}`}>
+      <div className={`space-y-0.5 ${loading ? 'opacity-50' : ''}`}>
         {Array.from({ length: weeks }, (_, w) => {
           const weekCells = cells.slice(w * 7, w * 7 + 7)
-          // Week totals
           let weekIncome = 0, weekExpense = 0
           weekCells.forEach(day => {
             if (!day) return
@@ -219,7 +223,7 @@ export default function CalendarPage() {
           })
 
           return (
-            <div key={w} className="grid gap-1" style={{ gridTemplateColumns: 'repeat(7, 1fr) 48px' }}>
+            <div key={w} className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(7, 1fr) 36px' }}>
               {weekCells.map((day, idx) => {
                 if (!day) return <div key={`e-${w}-${idx}`} className="min-h-[72px]" />
                 const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
@@ -227,12 +231,11 @@ export default function CalendarPage() {
                 const isToday = dateStr === todayStr
                 const isSelected = dateStr === selected
                 const dow = (firstDow + day - 1) % 7
-                // Heatmap: very soft pastel expense tint, up to 8% intensity
                 const heatPct = data?.expense ? Math.min(Math.round((data.expense / maxDayExpense) * 8), 8) : 0
 
                 return (
                   <button key={dateStr} onClick={() => setSelected(isSelected ? null : dateStr)}
-                    className={`flex min-h-[72px] flex-col rounded-lg border p-1.5 text-left transition-all relative overflow-hidden
+                    className={`flex min-h-[72px] flex-col rounded-md border p-1 text-left transition-all relative overflow-hidden
                       ${isSelected ? 'border-primary ring-1 ring-primary' : 'border-border hover:border-primary/40'}`}
                     style={{
                       backgroundColor: isSelected
@@ -242,27 +245,27 @@ export default function CalendarPage() {
                         : cellBase
                     }}
                   >
-                    <span className={`text-xs font-semibold mb-0.5 ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : isToday ? 'text-primary' : ''}`}>
+                    <span className={`text-[11px] font-semibold leading-none mb-0.5 ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : isToday ? 'text-primary' : ''}`}>
                       {day}
-                      {isToday && <span className="ml-1 text-[9px] bg-primary text-primary-foreground rounded px-1">Hari ini</span>}
+                      {isToday && <span className="ml-1 text-[8px] bg-primary text-primary-foreground rounded px-1">Hari ini</span>}
                     </span>
                     {data && (
-                      <div className="flex flex-col gap-0.5 mt-0.5">
+                      <div className="flex flex-col gap-px">
                         {data.income > 0 && (
-                          <span className="text-[10px] font-medium text-green-600 leading-tight">
+                          <span className="text-[9px] font-medium text-green-600 leading-tight">
                             +{compact(data.income)}
                             {totalIncome > 0 && <span className="text-green-400 ml-0.5">{Math.round((data.income/totalIncome)*100)}%</span>}
                           </span>
                         )}
                         {data.expense > 0 && (
-                          <span className="text-[10px] font-medium text-red-500 leading-tight">
+                          <span className="text-[9px] font-medium text-red-500 leading-tight">
                             -{compact(data.expense)}
                             {totalExpense > 0 && <span className="text-red-300 ml-0.5">{Math.round((data.expense/totalExpense)*100)}%</span>}
                           </span>
                         )}
                         {data.transferCount > 0 && (
-                          <span className="text-[10px] text-blue-500 leading-tight flex items-center gap-0.5">
-                            <ArrowLeftRight size={9} />{data.transferCount}×
+                          <span className="text-[9px] text-blue-500 leading-tight flex items-center gap-0.5">
+                            <ArrowLeftRight size={8} />{data.transferCount}×
                           </span>
                         )}
                       </div>
@@ -272,212 +275,161 @@ export default function CalendarPage() {
               })}
 
               {/* Week total column */}
-              <div className="flex min-h-[72px] flex-col items-center justify-center rounded-lg bg-muted/30 border border-dashed border-border/50 px-1 gap-0.5">
-                {weekIncome > 0 && <span className="text-[9px] font-medium text-green-600 leading-tight">+{compact(weekIncome)}</span>}
-                {weekExpense > 0 && <span className="text-[9px] font-medium text-red-500 leading-tight">-{compact(weekExpense)}</span>}
-                {weekIncome === 0 && weekExpense === 0 && <span className="text-[9px] text-muted-foreground/40">—</span>}
+              <div className="flex min-h-[72px] flex-col items-center justify-center rounded-md bg-muted/30 border border-dashed border-border/50 px-0.5 gap-px">
+                {weekIncome > 0 && <span className="text-[8px] font-medium text-green-600 leading-tight">+{compact(weekIncome)}</span>}
+                {weekExpense > 0 && <span className="text-[8px] font-medium text-red-500 leading-tight">-{compact(weekExpense)}</span>}
+                {weekIncome === 0 && weekExpense === 0 && <span className="text-[8px] text-muted-foreground/40">—</span>}
               </div>
             </div>
           )
         })}
       </div>
+      </div>{/* end calendar col */}
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="flex items-center gap-3 rounded-xl border bg-green-50 dark:bg-green-950/20 p-4">
-          <TrendingUp size={20} className="text-green-600 shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Pemasukan</p>
-            <p className="text-base font-bold text-green-600">+{rp(totalIncome)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-xl border bg-red-50 dark:bg-red-950/20 p-4">
-          <TrendingDown size={20} className="text-red-500 shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Pengeluaran</p>
-            <p className="text-base font-bold text-red-500">-{rp(totalExpense)}</p>
-          </div>
-        </div>
-        <div className={`flex items-center gap-3 rounded-xl border p-4 ${net >= 0 ? 'bg-green-50 dark:bg-green-950/20' : 'bg-red-50 dark:bg-red-950/20'}`}>
-          <Wallet size={20} className={`shrink-0 ${net >= 0 ? 'text-green-600' : 'text-red-500'}`} />
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Selisih</p>
-            <p className={`text-base font-bold ${net >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {net >= 0 ? '+' : ''}{rp(net)}
-            </p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              {savingsRate >= 0 ? `Tabungan ${savingsRate}%` : `Defisit ${Math.abs(savingsRate)}%`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-4">
-          <Hash size={20} className="text-muted-foreground shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground mb-1">Jumlah transaksi</p>
-            <p className="text-base font-bold">{totalTxCount}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{activeDays} hari aktif</p>
-          </div>
-        </div>
-      </div>
+      {/* Right panel — stats */}
+      <div className="w-[28%] shrink-0 space-y-1.5">
 
-      {/* Stats bar */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <CalendarDays size={18} className="text-muted-foreground shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground">Hari aktif</p>
-            <p className="text-sm font-bold">{activeDays} hari</p>
-            <p className="text-[11px] text-muted-foreground">rata-rata {rp(Math.round(avgPerActiveDay))}/hari</p>
+        {/* Summary cards 2x2 */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-green-50 dark:bg-green-950/20 px-2 py-1.5">
+            <div className="flex items-center gap-1"><TrendingUp size={11} className="text-green-600 shrink-0" /><p className="text-[9px] text-muted-foreground">Pemasukan</p></div>
+            <p className="text-xs font-bold text-green-600 tabular-nums">+{rp(totalIncome)}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <TrendingDown size={18} className="text-red-500 shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground">Pengeluaran terbesar</p>
-            {biggestExpenseDay ? (
-              <>
-                <p className="text-sm font-bold text-red-500">{rp(biggestExpenseDay[1].expense)}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {(() => { const [,m,d] = biggestExpenseDay[0].split('-'); return `${d}/${m}` })()}
-                </p>
-              </>
-            ) : <p className="text-sm text-muted-foreground">—</p>}
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-red-50 dark:bg-red-950/20 px-2 py-1.5">
+            <div className="flex items-center gap-1"><TrendingDown size={11} className="text-red-500 shrink-0" /><p className="text-[9px] text-muted-foreground">Pengeluaran</p></div>
+            <p className="text-xs font-bold text-red-500 tabular-nums">-{rp(totalExpense)}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <Activity size={18} className="text-muted-foreground shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground">Rata-rata belanja</p>
-            {expenseTxCount > 0 ? (
-              <>
-                <p className="text-sm font-bold text-red-500">{rp(avgExpensePerTx)}</p>
-                <p className="text-[11px] text-muted-foreground">per transaksi</p>
-              </>
-            ) : <p className="text-sm text-muted-foreground">—</p>}
+          <div className={`flex flex-col gap-0.5 rounded-lg border px-2 py-1.5 ${net >= 0 ? 'bg-green-50 dark:bg-green-950/20' : 'bg-red-50 dark:bg-red-950/20'}`}>
+            <div className="flex items-center gap-1"><Wallet size={11} className={`shrink-0 ${net >= 0 ? 'text-green-600' : 'text-red-500'}`} /><p className="text-[9px] text-muted-foreground">Selisih</p></div>
+            <p className={`text-xs font-bold tabular-nums ${net >= 0 ? 'text-green-600' : 'text-red-500'}`}>{net >= 0 ? '+' : ''}{rp(net)}</p>
+            <p className="text-[9px] text-muted-foreground">{savingsRate >= 0 ? `${savingsRate}%` : `Defisit ${Math.abs(savingsRate)}%`}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <Flame size={18} className={noSpendStreak >= 3 ? 'text-orange-500 shrink-0' : 'text-muted-foreground shrink-0'} />
-          <div>
-            <p className="text-xs text-muted-foreground">No-spend streak</p>
-            <p className="text-sm font-bold">{noSpendStreak} hari</p>
-            <p className="text-[11px] text-muted-foreground">berturut tanpa pengeluaran</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Extra insights */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {/* Top expense category */}
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <Tag size={18} className="text-muted-foreground shrink-0" />
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground">Kategori terbesar</p>
-            {topCategory ? (
-              <>
-                <p className="text-sm font-bold truncate">{topCategory.icon} {topCategory.name}</p>
-                <p className="text-[11px] text-red-500">{rp(topCategory.amount)}</p>
-              </>
-            ) : <p className="text-sm text-muted-foreground">—</p>}
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5">
+            <div className="flex items-center gap-1"><Hash size={11} className="text-muted-foreground shrink-0" /><p className="text-[9px] text-muted-foreground">Transaksi</p></div>
+            <p className="text-xs font-bold tabular-nums">{totalTxCount}</p>
+            <p className="text-[9px] text-muted-foreground">{activeDays} hari aktif</p>
           </div>
         </div>
 
-        {/* Busiest day of week */}
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <BarChart3 size={18} className="text-muted-foreground shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground">Hari paling boros</p>
-            {busiestDow ? (
-              <>
-                <p className="text-sm font-bold">{busiestDow.label}</p>
-                <p className="text-[11px] text-muted-foreground">total {rp(busiestDow.amount)}</p>
-              </>
-            ) : <p className="text-sm text-muted-foreground">—</p>}
+        {/* Stats 2x2 */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5">
+            <div className="flex items-center gap-1"><CalendarDays size={11} className="text-muted-foreground shrink-0" /><p className="text-[9px] text-muted-foreground">Hari aktif</p></div>
+            <p className="text-xs font-bold">{activeDays} hari</p>
+            <p className="text-[9px] text-muted-foreground truncate">{rp(Math.round(avgPerActiveDay))}/hari</p>
+          </div>
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5">
+            <div className="flex items-center gap-1"><TrendingDown size={11} className="text-red-500 shrink-0" /><p className="text-[9px] text-muted-foreground">Terbesar</p></div>
+            {biggestExpenseDay ? (<><p className="text-xs font-bold text-red-500 tabular-nums truncate">{rp(biggestExpenseDay[1].expense)}</p><p className="text-[9px] text-muted-foreground">{(() => { const [,m,d] = biggestExpenseDay[0].split('-'); return `${d}/${m}` })()}</p></>) : <p className="text-xs text-muted-foreground">—</p>}
+          </div>
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5">
+            <div className="flex items-center gap-1"><Activity size={11} className="text-muted-foreground shrink-0" /><p className="text-[9px] text-muted-foreground">Rata-rata</p></div>
+            {expenseTxCount > 0 ? (<><p className="text-xs font-bold text-red-500 tabular-nums truncate">{rp(avgExpensePerTx)}</p><p className="text-[9px] text-muted-foreground">per transaksi</p></>) : <p className="text-xs text-muted-foreground">—</p>}
+          </div>
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5">
+            <div className="flex items-center gap-1"><Flame size={11} className={noSpendStreak >= 3 ? 'text-orange-500 shrink-0' : 'text-muted-foreground shrink-0'} /><p className="text-[9px] text-muted-foreground">No-spend</p></div>
+            <p className="text-xs font-bold">{noSpendStreak} hari</p>
+            <p className="text-[9px] text-muted-foreground">berturut</p>
           </div>
         </div>
 
-        {/* Day with most transactions */}
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <Zap size={18} className="text-muted-foreground shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground">Hari tersibuk</p>
-            {busiestDay ? (
-              <>
-                <p className="text-sm font-bold">
-                  {(() => { const [,m,d] = busiestDay[0].split('-'); return `${d}/${m}` })()}
-                </p>
-                <p className="text-[11px] text-muted-foreground">{busiestDay[1].count} transaksi</p>
-              </>
-            ) : <p className="text-sm text-muted-foreground">—</p>}
+        {/* Insights 2x2 */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5 min-w-0">
+            <div className="flex items-center gap-1"><Tag size={11} className="text-muted-foreground shrink-0" /><p className="text-[9px] text-muted-foreground">Kategori</p></div>
+            {topCategory ? (<><p className="text-xs font-bold truncate">{topCategory.icon} {topCategory.name}</p><p className="text-[9px] text-red-500 tabular-nums truncate">{rp(topCategory.amount)}</p></>) : <p className="text-xs text-muted-foreground">—</p>}
+          </div>
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5">
+            <div className="flex items-center gap-1"><BarChart3 size={11} className="text-muted-foreground shrink-0" /><p className="text-[9px] text-muted-foreground">Paling boros</p></div>
+            {busiestDow ? (<><p className="text-xs font-bold">{busiestDow.label}</p><p className="text-[9px] text-muted-foreground tabular-nums truncate">{rp(busiestDow.amount)}</p></>) : <p className="text-xs text-muted-foreground">—</p>}
+          </div>
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5">
+            <div className="flex items-center gap-1"><Zap size={11} className="text-muted-foreground shrink-0" /><p className="text-[9px] text-muted-foreground">Tersibuk</p></div>
+            {busiestDay ? (<><p className="text-xs font-bold">{(() => { const [,m,d] = busiestDay[0].split('-'); return `${d}/${m}` })()}</p><p className="text-[9px] text-muted-foreground">{busiestDay[1].count} transaksi</p></>) : <p className="text-xs text-muted-foreground">—</p>}
+          </div>
+          <div className="flex flex-col gap-0.5 rounded-lg border bg-card px-2 py-1.5">
+            <div className="flex items-center gap-1"><TrendingUp size={11} className="text-green-600 shrink-0" /><p className="text-[9px] text-muted-foreground">Pemasukan</p></div>
+            {biggestIncomeDay ? (<><p className="text-xs font-bold text-green-600 tabular-nums truncate">{rp(biggestIncomeDay[1].income)}</p><p className="text-[9px] text-muted-foreground">{(() => { const [,m,d] = biggestIncomeDay[0].split('-'); return `${d}/${m}` })()}</p></>) : <p className="text-xs text-muted-foreground">—</p>}
           </div>
         </div>
 
-        {/* Biggest income day */}
-        <div className="flex items-center gap-3 rounded-xl border bg-card p-3">
-          <TrendingUp size={18} className="text-green-600 shrink-0" />
-          <div>
-            <p className="text-xs text-muted-foreground">Pemasukan terbesar</p>
-            {biggestIncomeDay ? (
-              <>
-                <p className="text-sm font-bold text-green-600">{rp(biggestIncomeDay[1].income)}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {(() => { const [,m,d] = biggestIncomeDay[0].split('-'); return `${d}/${m}` })()}
-                </p>
-              </>
-            ) : <p className="text-sm text-muted-foreground">—</p>}
-          </div>
-        </div>
-      </div>
+      </div>{/* end right panel */}
+      </div>{/* end flex row */}
 
       {/* Day detail */}
-      {selected && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold">
-              {(() => { const [,m,d] = selected.split('-'); return `${d}/${m}/${year}` })()}
-              <span className="text-muted-foreground font-normal ml-2 text-xs">
-                {selectedTxs.length} transaksi
-              </span>
-            </p>
-            {selectedData && (
-              <div className="flex gap-4 text-xs">
-                {selectedData.income > 0 && <span className="text-green-600 font-medium">+{rp(selectedData.income)}</span>}
-                {selectedData.expense > 0 && <span className="text-red-500 font-medium">-{rp(selectedData.expense)}</span>}
+      {selected && (() => {
+        // Group by account
+        const groups: { accountId: string; accountName: string; txs: typeof selectedTxs }[] = []
+        selectedTxs.forEach(t => {
+          const key = t.account_id ?? '__none__'
+          const name = t.account?.name ?? 'Tanpa Rekening'
+          let g = groups.find(g => g.accountId === key)
+          if (!g) { g = { accountId: key, accountName: name, txs: [] }; groups.push(g) }
+          g.txs.push(t)
+        })
+
+        return (
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold">
+                {(() => { const [,m,d] = selected.split('-'); return `${d}/${m}/${year}` })()}
+                <span className="text-muted-foreground font-normal ml-2 text-xs">{selectedTxs.length} transaksi</span>
+              </p>
+              {selectedData && (
+                <div className="flex gap-4 text-xs">
+                  {selectedData.income > 0 && <span className="text-green-600 font-medium">+{rp(selectedData.income)}</span>}
+                  {selectedData.expense > 0 && <span className="text-red-500 font-medium">-{rp(selectedData.expense)}</span>}
+                </div>
+              )}
+            </div>
+            {selectedTxs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tidak ada transaksi</p>
+            ) : (
+              <div className="max-h-64 overflow-y-auto space-y-4 pr-1">
+                {groups.map(group => {
+                  const groupIncome = group.txs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
+                  const groupExpense = group.txs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+                  return (
+                    <div key={group.accountId}>
+                      {/* Account header */}
+                      <div className="flex items-center justify-between mb-1.5 pb-1 border-b">
+                        <span className="text-xs font-semibold text-muted-foreground">{group.accountName}</span>
+                        <div className="flex gap-3 text-[11px]">
+                          {groupIncome > 0 && <span className="text-green-600 font-medium">+{rp(groupIncome)}</span>}
+                          {groupExpense > 0 && <span className="text-red-500 font-medium">-{rp(groupExpense)}</span>}
+                        </div>
+                      </div>
+                      {/* Transactions */}
+                      <div className="space-y-1.5">
+                        {group.txs.map(t => (
+                          <div key={t.id} className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {t.type === 'transfer'
+                                ? <ArrowLeftRight size={14} className="text-blue-500 shrink-0" />
+                                : <span className="text-sm shrink-0">{t.category?.icon}</span>}
+                              <div className="min-w-0">
+                                <span className="font-medium text-sm">
+                                  {t.type === 'transfer'
+                                    ? `${t.account?.name ?? '?'} → ${t.to_account?.name ?? '?'}`
+                                    : t.category?.name ?? '—'}
+                                </span>
+                                {t.description && <span className="text-muted-foreground text-xs ml-1.5">· {t.description}</span>}
+                              </div>
+                            </div>
+                            <span className={`font-medium shrink-0 ml-2 text-sm ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-red-500'}`}>
+                              {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{rp(t.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
-          </div>
-          {selectedTxs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Tidak ada transaksi</p>
-          ) : (
-            <div className="space-y-2">
-              {selectedTxs.map(t => (
-                <div key={t.id} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {t.type === 'transfer'
-                      ? <ArrowLeftRight size={16} className="text-blue-500 shrink-0" />
-                      : <span className="text-base shrink-0">{t.category?.icon}</span>
-                    }
-                    <div className="min-w-0">
-                      <span className="font-medium">
-                        {t.type === 'transfer'
-                          ? `${t.account?.name ?? '?'} → ${t.to_account?.name ?? '?'}`
-                          : t.category?.name ?? '—'}
-                      </span>
-                      {t.description && <span className="text-muted-foreground text-xs ml-1.5">· {t.description}</span>}
-                      {t.account && t.type !== 'transfer' && (
-                        <span className="text-muted-foreground text-xs ml-1.5">· {t.account.name}</span>
-                      )}
-                    </div>
-                  </div>
-                  <span className={`font-medium shrink-0 ml-2 ${t.type === 'income' ? 'text-green-600' : t.type === 'transfer' ? 'text-blue-600' : 'text-red-500'}`}>
-                    {t.type === 'income' ? '+' : t.type === 'transfer' ? '' : '-'}{rp(t.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
+          </Card>
+        )
+      })()}
     </div>
   )
 }
