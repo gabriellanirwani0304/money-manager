@@ -56,5 +56,18 @@ services:
       db:
         condition: service_healthy
 
+  cms:
+    build:
+      context: ./cms
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    container_name: money-manager-cms
+    restart: unless-stopped
+    ports:
+      - "4173:4173"
+    depends_on:
+      - backend
+
 volumes:
   db_data:

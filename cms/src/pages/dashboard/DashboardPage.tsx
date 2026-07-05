@@ -43,7 +43,7 @@ const MATERIAL_ICON_EMOJI: Record<string, string> = {
 }
 function resolveIcon(icon: string): string {
   if (!icon) return '🏦'
-  if (icon.runes !== undefined || [...icon].some(c => c.codePointAt(0)! > 127)) return icon
+  if ([...icon].some(c => c.codePointAt(0)! > 127)) return icon
   return MATERIAL_ICON_EMOJI[icon] ?? '🏦'
 }
 
@@ -356,7 +356,7 @@ export default function DashboardPage() {
                 <div key={acc.id} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 hover:bg-muted/40 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-sm shrink-0">
-                      {resolveIcon(acc.icon)}
+                      {resolveIcon(acc.icon ?? '')}
                     </div>
                     <div>
                       <p className="text-xs font-semibold">{acc.name}</p>

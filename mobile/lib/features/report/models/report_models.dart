@@ -63,6 +63,30 @@ class WeekSummary {
   });
 }
 
+class DailyCashFlow {
+  final int day;
+  final double income;
+  final double expense;
+
+  const DailyCashFlow({required this.day, required this.income, required this.expense});
+}
+
+class CategoryTrendSeries {
+  final String id;
+  final String name;
+  final String icon;
+  final String color;
+  final List<double> amounts; // per month, last 6
+
+  const CategoryTrendSeries({
+    required this.id,
+    required this.name,
+    required this.icon,
+    required this.color,
+    required this.amounts,
+  });
+}
+
 class ReportInsights {
   final String? topCategoryName;
   final double? topCategoryAmount;

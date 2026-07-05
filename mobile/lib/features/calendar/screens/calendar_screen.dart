@@ -416,7 +416,17 @@ class _DayDetail extends StatelessWidget {
           ]),
           const SizedBox(height: 12),
           if (txs.isEmpty)
-            const Text('Tidak ada transaksi', style: TextStyle(color: AppColors.textSecondary))
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                children: const [
+                  Text('📭', style: TextStyle(fontSize: 36)),
+                  SizedBox(height: 8),
+                  Text('Tidak ada transaksi hari ini',
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                ],
+              ),
+            )
           else
             ...txs.map((tx) {
               final type = tx['type'] as String? ?? '';

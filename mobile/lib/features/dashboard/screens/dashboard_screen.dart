@@ -8,7 +8,8 @@ import '../../auth/providers/auth_provider.dart';
 import '../../transaction/screens/add_transaction_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final ValueChanged<int>? onNavigateTo;
+  const DashboardScreen({super.key, this.onNavigateTo});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -65,13 +66,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 // Recent Transactions
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
                     child: SectionHeader(
                       title: 'Transaksi Terbaru',
                       actionLabel: 'Lihat Semua',
-                      onAction: () {
-                        // Navigate to transactions tab
-                      },
+                      onAction: () => widget.onNavigateTo?.call(2),
                     ),
                   ),
                 ),
@@ -171,15 +170,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-                  onPressed: () {},
-                ),
+              Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: PopupMenuButton<String>(
+                      icon: const Icon(Icons.person_outline, color: Colors.white),
+                      color: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      onSelected: (value) async {
+                        if (value == 'logout') {
+                          await context.read<AuthProvider>().logout();
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'logout',
+                          child: Row(
+                            children: [
+                              Icon(Icons.logout, color: Colors.red),
+                              SizedBox(width: 8),
+                              Text('Logout', style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -414,28 +435,10 @@ class _EmptyTransactions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(40),
-      child: Column(
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.receipt_long_outlined, size: 40, color: AppColors.primary),
-          ),
-          const SizedBox(height: 16),
-          const Text('Belum ada transaksi',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          const Text('Mulai catat pemasukan & pengeluaranmu!',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-              textAlign: TextAlign.center),
-        ],
-      ),
+    return const EmptyState(
+      emoji: '✨',
+      title: 'Mulai perjalananmu!',
+      subtitle: 'Catat transaksi pertamamu dan mulai kendalikan keuanganmu',
     );
   }
 }

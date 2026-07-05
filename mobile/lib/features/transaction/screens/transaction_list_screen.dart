@@ -24,7 +24,6 @@ class TransactionListScreen extends StatefulWidget {
 class _TransactionListScreenState extends State<TransactionListScreen> {
   final _scrollCtrl = ScrollController();
   final _searchCtrl = TextEditingController();
-  bool _showSearch = false;
 
   @override
   void initState() {
@@ -52,73 +51,11 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: _showSearch
-            ? TextField(
-                controller: _searchCtrl,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Cari transaksi...',
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onChanged: (v) {
-                  if (v.isEmpty || v.length >= 2) {
-                    context.read<TransactionProvider>().setFilter(search: v.isNotEmpty ? v : null);
-                  }
-                },
-              )
-            : const Text('Transaksi'),
+        title: const Text('Transaksi'),
         actions: [
           IconButton(
-            icon: Icon(_showSearch ? Icons.close_rounded : Icons.search_rounded),
-            onPressed: () {
-              setState(() => _showSearch = !_showSearch);
-              if (!_showSearch) {
-                _searchCtrl.clear();
-                context.read<TransactionProvider>().clearFilters();
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.calendar_month_outlined),
-            tooltip: 'Kalender',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CalendarScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.playlist_add_rounded),
-            tooltip: 'Input Massal',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BulkTransactionScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.upload_file_rounded),
-            tooltip: 'Import CSV',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ImportCsvScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.category_outlined),
-            tooltip: 'Kelola Kategori',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CategoryScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.download_rounded),
-            tooltip: 'Export CSV',
-            onPressed: _showExportDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_list_rounded),
-            onPressed: _showFilterSheet,
+            icon: const Icon(Icons.more_vert_rounded),
+            onPressed: () => _showMoreMenu(context),
           ),
         ],
       ),
@@ -133,7 +70,10 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
               // Summary bar
               _buildSummaryBar(p),
 
-              // Filter chips
+              // Search + Filter row
+              _buildSearchBar(p),
+
+              // Active filter chips
               _buildActiveFilter(p),
 
               // List
@@ -174,16 +114,85 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddTransactionScreen()),
-          );
-          if (mounted) context.read<TransactionProvider>().load();
-        },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add_rounded, color: Colors.white),
+    );
+  }
+
+  Widget _buildSearchBar(TransactionProvider p) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) {
+                if (v.isEmpty || v.length >= 2) {
+                  p.setFilter(search: v.isNotEmpty ? v : null);
+                }
+              },
+              decoration: InputDecoration(
+                hintText: 'Cari transaksi...',
+                hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 14),
+                prefixIcon: const Icon(Icons.search_rounded,
+                    size: 20, color: AppColors.textHint),
+                suffixIcon: _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          p.setFilter(search: null);
+                          setState(() {});
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppColors.background,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                ),
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Consumer<TransactionProvider>(
+            builder: (_, tp, __) {
+              final hasFilter = tp.filterType != null ||
+                  tp.filterCategoryId != null ||
+                  tp.filterAccountId != null ||
+                  tp.filterStartDate != null;
+              return GestureDetector(
+                onTap: _showFilterSheet,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: hasFilter
+                        ? AppColors.primary
+                        : AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.filter_list_rounded,
+                    color: hasFilter ? Colors.white : AppColors.textSecondary,
+                    size: 22,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -281,27 +290,123 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   }
 
   Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
-              shape: BoxShape.circle,
+    final p = context.read<TransactionProvider>();
+    final hasFilter = p.filterType != null || p.filterCategoryId != null ||
+        p.filterAccountId != null || p.filterStartDate != null;
+    return EmptyState(
+      emoji: hasFilter ? '🔍' : '🧾',
+      title: hasFilter ? 'Tidak ada hasil' : 'Belum ada transaksi',
+      subtitle: hasFilter
+          ? 'Coba ubah filter atau kata kunci pencarianmu'
+          : 'Tap + untuk mulai mencatat pemasukan & pengeluaran',
+    );
+  }
+
+  void _showMoreMenu(BuildContext context) {
+    final items = [
+      (
+        icon: Icons.calendar_month_rounded,
+        color: const Color(0xFF6C5CE7),
+        label: 'Kalender',
+        desc: 'Lihat transaksi per tanggal',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen())),
+      ),
+      (
+        icon: Icons.playlist_add_rounded,
+        color: const Color(0xFF00B894),
+        label: 'Input Massal',
+        desc: 'Tambah banyak transaksi sekaligus',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BulkTransactionScreen())),
+      ),
+      (
+        icon: Icons.upload_file_rounded,
+        color: const Color(0xFF0984E3),
+        label: 'Import CSV',
+        desc: 'Import data dari file CSV',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ImportCsvScreen())),
+      ),
+      (
+        icon: Icons.download_rounded,
+        color: const Color(0xFFE17055),
+        label: 'Export CSV',
+        desc: 'Unduh data transaksi',
+        onTap: () { Navigator.pop(context); _showExportDialog(); },
+      ),
+      (
+        icon: Icons.category_rounded,
+        color: const Color(0xFFE84393),
+        label: 'Kelola Kategori',
+        desc: 'Atur kategori pengeluaran & pemasukan',
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoryScreen())),
+      ),
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-            child: const Icon(Icons.receipt_long_outlined,
-                size: 48, color: AppColors.primary),
-          ),
-          const SizedBox(height: 20),
-          const Text('Tidak ada transaksi',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          const Text('Tap + untuk mencatat transaksi baru',
-              style: TextStyle(color: AppColors.textSecondary)),
-        ],
+            const SizedBox(height: 16),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Text('Menu', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...items.map((item) => InkWell(
+              onTap: () { Navigator.pop(context); item.onTap(); },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44, height: 44,
+                      decoration: BoxDecoration(
+                        color: item.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(item.icon, color: item.color, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item.label,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                          Text(item.desc,
+                              style: const TextStyle(
+                                  fontSize: 12, color: AppColors.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right_rounded,
+                        color: AppColors.textHint, size: 20),
+                  ],
+                ),
+              ),
+            )),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -660,9 +765,23 @@ class _FilterSheetState extends State<_FilterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Filter Transaksi',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Filter Transaksi',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                TextButton.icon(
+                  onPressed: widget.onReset,
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Reset'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
 
             // Tipe
             const Text('Tipe', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 12)),
@@ -872,29 +991,18 @@ class _FilterSheetState extends State<_FilterSheet> {
             ),
 
             const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: widget.onReset,
-                    child: const Text('Reset'),
-                  ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => widget.onApply(
+                  _type,
+                  _catId,
+                  _accId,
+                  _startDate != null ? _fmt(_startDate!) : null,
+                  _endDate != null ? _fmt(_endDate!) : null,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: () => widget.onApply(
-                      _type,
-                      _catId,
-                      _accId,
-                      _startDate != null ? _fmt(_startDate!) : null,
-                      _endDate != null ? _fmt(_endDate!) : null,
-                    ),
-                    child: const Text('Terapkan'),
-                  ),
-                ),
-              ],
+                child: const Text('Terapkan Filter'),
+              ),
             ),
           ],
         ),

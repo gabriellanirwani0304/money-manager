@@ -129,9 +129,13 @@ export function TransactionFormFields({ value, onChange, categories, accounts, o
       <div className="space-y-1">
         <Label>Jumlah (Rp)</Label>
         <Input
-          type="number"
-          value={value.amount || ''}
-          onChange={(e) => set({ amount: Number(e.target.value) })}
+          type="text"
+          inputMode="numeric"
+          value={value.amount === 0 ? '' : String(value.amount)}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/\D/g, '')
+            set({ amount: raw === '' ? 0 : Number(raw) })
+          }}
           placeholder="0"
         />
       </div>

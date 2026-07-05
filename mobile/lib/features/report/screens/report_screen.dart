@@ -20,11 +20,12 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabCtrl = TabController(length: 4, vsync: this);
+    _tabCtrl = TabController(length: 5, vsync: this);
     _tabCtrl.addListener(() {
-      if (!_tabCtrl.indexIsChanging && _tabCtrl.index == 2) {
+      if (!_tabCtrl.indexIsChanging) {
         final p = context.read<ReportProvider>();
-        p.loadWeekly(month: p.month, year: p.year);
+        if (_tabCtrl.index == 2) p.loadDaily(month: p.month, year: p.year);
+        if (_tabCtrl.index == 3) p.loadCategoryTrend();
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -78,7 +79,8 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
           tabs: const [
             Tab(text: 'Ringkasan'),
             Tab(text: 'Kategori'),
-            Tab(text: 'Mingguan'),
+            Tab(text: 'Harian'),
+            Tab(text: 'Tren'),
             Tab(text: 'Komparasi'),
           ],
         ),
@@ -94,7 +96,8 @@ class _ReportScreenState extends State<ReportScreen> with SingleTickerProviderSt
             children: [
               _SummaryTab(provider: p),
               _CategoryTab(provider: p),
-              _WeeklyTab(provider: p),
+              _DailyTab(provider: p),
+              _CategoryTrendTab(provider: p),
               _CompareTab(provider: p),
             ],
           );
@@ -111,6 +114,16 @@ class _SummaryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = provider.summary;
+    final hasAnyData = s != null || provider.insights != null || provider.trends.isNotEmpty;
+
+    if (!hasAnyData) {
+      return const EmptyState(
+        emoji: '📋',
+        title: 'Belum ada ringkasan',
+        subtitle: 'Tambahkan transaksi di bulan ini untuk melihat ringkasan keuanganmu',
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -229,12 +242,23 @@ class _CategoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasExpense = provider.breakdownExpense.isNotEmpty;
+    final hasIncome = provider.breakdownIncome.isNotEmpty;
+
+    if (!hasExpense && !hasIncome) {
+      return const EmptyState(
+        emoji: '🗂️',
+        title: 'Belum ada data kategori',
+        subtitle: 'Catat beberapa transaksi di bulan ini untuk melihat breakdown per kategori',
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           // Expense breakdown
-          if (provider.breakdownExpense.isNotEmpty) ...[
+          if (hasExpense) ...[
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,7 +283,7 @@ class _CategoryTab extends StatelessWidget {
           ],
 
           // Income breakdown
-          if (provider.breakdownIncome.isNotEmpty) ...[
+          if (hasIncome) ...[
             AppCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -478,176 +502,6 @@ class _LegendItem extends StatelessWidget {
   }
 }
 
-class _WeeklyTab extends StatelessWidget {
-  final ReportProvider provider;
-  const _WeeklyTab({required this.provider});
-
-  @override
-  Widget build(BuildContext context) {
-    if (provider.weeklyLoading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-    }
-
-    if (provider.weekly.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.bar_chart_rounded, size: 64, color: AppColors.textHint),
-            const SizedBox(height: 12),
-            const Text('Belum ada data mingguan',
-                style: TextStyle(color: AppColors.textSecondary)),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => provider.loadWeekly(),
-              child: const Text('Muat Data'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final weeks = provider.weekly;
-    final maxVal = weeks.fold(0.0, (m, w) => m > w.income ? m > w.expense ? m : w.expense : w.income > w.expense ? w.income : w.expense);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Bar chart
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionHeader(title: '📅 Pendapatan & Pengeluaran per Minggu'),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 200,
-                  child: BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY: maxVal * 1.25,
-                      barTouchData: BarTouchData(enabled: false),
-                      titlesData: FlTitlesData(
-                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (v, _) {
-                              final idx = v.toInt();
-                              if (idx < 0 || idx >= weeks.length) return const SizedBox();
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text('M${weeks[idx].week}',
-                                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      gridData: FlGridData(
-                        drawVerticalLine: false,
-                        getDrawingHorizontalLine: (_) =>
-                            const FlLine(color: AppColors.divider, strokeWidth: 1),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      barGroups: weeks.asMap().entries.map((e) {
-                        return BarChartGroupData(
-                          x: e.key,
-                          barRods: [
-                            BarChartRodData(
-                              toY: e.value.income,
-                              color: AppColors.income,
-                              width: 12,
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                            ),
-                            BarChartRodData(
-                              toY: e.value.expense,
-                              color: AppColors.expense,
-                              width: 12,
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _LegendItem(color: AppColors.income, label: 'Pemasukan'),
-                    const SizedBox(width: 20),
-                    _LegendItem(color: AppColors.expense, label: 'Pengeluaran'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Summary per week
-          ...weeks.map((w) {
-            final net = w.income - w.expense;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Minggu ${w.week}',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                        Text(
-                          net >= 0 ? '+${CurrencyFormatter.compact(net)}' : CurrencyFormatter.compact(net),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: net >= 0 ? AppColors.income : AppColors.expense,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Pemasukan', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                              Text(CurrencyFormatter.compact(w.income),
-                                  style: const TextStyle(color: AppColors.income, fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Pengeluaran', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                              Text(CurrencyFormatter.compact(w.expense),
-                                  style: const TextStyle(color: AppColors.expense, fontWeight: FontWeight.w700)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
 
 class _InsightsCard extends StatelessWidget {
   final ReportInsights insights;
@@ -762,6 +616,437 @@ class _InsightRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Arus Kas Harian ───────────────────────────────────────────────────────
+
+class _DailyTab extends StatelessWidget {
+  final ReportProvider provider;
+  const _DailyTab({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.dailyLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+    if (provider.daily.isEmpty) {
+      return EmptyState(
+        emoji: '📅',
+        title: 'Belum ada data harian',
+        subtitle: 'Tidak ada transaksi yang tercatat di bulan ini',
+        actionLabel: 'Muat Ulang',
+        onAction: () => provider.loadDaily(),
+      );
+    }
+
+    final days = provider.daily;
+    final hasData = days.any((d) => d.income > 0 || d.expense > 0);
+    if (!hasData) {
+      return const EmptyState(
+        emoji: '📅',
+        title: 'Tidak ada transaksi bulan ini',
+        subtitle: 'Mulai catat transaksi untuk melihat grafik arus kas harianmu',
+      );
+    }
+
+    final maxVal = days.fold(0.0, (m, d) => m > d.income ? (m > d.expense ? m : d.expense) : (d.income > d.expense ? d.income : d.expense));
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionHeader(title: '📅 Arus Kas Harian'),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 220,
+                  child: LineChart(
+                    LineChartData(
+                      minX: 1,
+                      maxX: days.length.toDouble(),
+                      minY: 0,
+                      maxY: maxVal * 1.2,
+                      gridData: FlGridData(
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (_) =>
+                            const FlLine(color: AppColors.divider, strokeWidth: 1),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      titlesData: FlTitlesData(
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            interval: 5,
+                            getTitlesWidget: (v, _) => Text(
+                              v.toInt().toString(),
+                              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                            ),
+                          ),
+                        ),
+                      ),
+                      lineTouchData: LineTouchData(
+                        touchTooltipData: LineTouchTooltipData(
+                          getTooltipItems: (spots) => spots.map((s) {
+                            final isIncome = s.barIndex == 0;
+                            return LineTooltipItem(
+                              'Tgl ${s.x.toInt()}\n${CurrencyFormatter.compact(s.y)}',
+                              TextStyle(
+                                color: isIncome ? AppColors.income : AppColors.expense,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: days.map((d) => FlSpot(d.day.toDouble(), d.income)).toList(),
+                          isCurved: true,
+                          color: AppColors.income,
+                          barWidth: 2.5,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: AppColors.income.withOpacity(0.08),
+                          ),
+                        ),
+                        LineChartBarData(
+                          spots: days.map((d) => FlSpot(d.day.toDouble(), d.expense)).toList(),
+                          isCurved: true,
+                          color: AppColors.expense,
+                          barWidth: 2.5,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: AppColors.expense.withOpacity(0.08),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _LegendItem(color: AppColors.income, label: 'Pemasukan'),
+                    const SizedBox(width: 20),
+                    _LegendItem(color: AppColors.expense, label: 'Pengeluaran'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Daily summary stats
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionHeader(title: '📊 Statistik Harian'),
+                const SizedBox(height: 12),
+                ...days.where((d) => d.income > 0 || d.expense > 0).map((d) {
+                  final net = d.income - d.expense;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32, height: 32,
+                          decoration: BoxDecoration(
+                            color: net >= 0 ? AppColors.income.withOpacity(0.1) : AppColors.expense.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text('${d.day}',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: net >= 0 ? AppColors.income : AppColors.expense)),
+                        ),
+                        const SizedBox(width: 12),
+                        if (d.income > 0) ...[
+                          const Icon(Icons.arrow_downward_rounded, size: 14, color: AppColors.income),
+                          const SizedBox(width: 2),
+                          Text(CurrencyFormatter.compact(d.income),
+                              style: const TextStyle(fontSize: 12, color: AppColors.income, fontWeight: FontWeight.w600)),
+                          const SizedBox(width: 8),
+                        ],
+                        if (d.expense > 0) ...[
+                          const Icon(Icons.arrow_upward_rounded, size: 14, color: AppColors.expense),
+                          const SizedBox(width: 2),
+                          Text(CurrencyFormatter.compact(d.expense),
+                              style: const TextStyle(fontSize: 12, color: AppColors.expense, fontWeight: FontWeight.w600)),
+                        ],
+                        const Spacer(),
+                        Text(
+                          net >= 0 ? '+${CurrencyFormatter.compact(net)}' : CurrencyFormatter.compact(net),
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: net >= 0 ? AppColors.income : AppColors.expense),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Tren Kategori ──────────────────────────────────────────────────────────
+
+class _CategoryTrendTab extends StatefulWidget {
+  final ReportProvider provider;
+  const _CategoryTrendTab({required this.provider});
+
+  @override
+  State<_CategoryTrendTab> createState() => _CategoryTrendTabState();
+}
+
+class _CategoryTrendTabState extends State<_CategoryTrendTab> {
+  String _type = 'expense';
+
+  static const _lineColors = [
+    Color(0xFF6366F1), Color(0xFFEF4444), Color(0xFF10B981),
+    Color(0xFFF59E0B), Color(0xFF3B82F6),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.provider;
+
+    if (p.catTrendLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Type selector
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _type = 'expense');
+                    p.loadCategoryTrend(type: 'expense');
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _type == 'expense' ? AppColors.expense : AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: _type == 'expense' ? AppColors.expense : AppColors.divider),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text('📉 Pengeluaran',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: _type == 'expense' ? Colors.white : AppColors.textSecondary)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _type = 'income');
+                    p.loadCategoryTrend(type: 'income');
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _type == 'income' ? AppColors.income : AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: _type == 'income' ? AppColors.income : AppColors.divider),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text('📈 Pemasukan',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: _type == 'income' ? Colors.white : AppColors.textSecondary)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          if (p.categoryTrend.isEmpty)
+            const EmptyState(
+              emoji: '📊',
+              title: 'Belum ada data tren',
+              subtitle: 'Perlu minimal 1 transaksi berkategori untuk menampilkan tren 6 bulan',
+            )
+          else ...[
+            // Line chart
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SectionHeader(title: '📊 Tren Top ${p.categoryTrend.length} Kategori (6 Bulan)'),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 220,
+                    child: LineChart(
+                      LineChartData(
+                        minX: 0,
+                        maxX: 5,
+                        minY: 0,
+                        maxY: p.categoryTrend
+                            .expand((s) => s.amounts)
+                            .fold(0.0, (m, v) => v > m ? v : m) * 1.25,
+                        gridData: FlGridData(
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (_) =>
+                              const FlLine(color: AppColors.divider, strokeWidth: 1),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        titlesData: FlTitlesData(
+                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (v, _) {
+                                final idx = v.toInt();
+                                if (idx < 0 || idx >= p.categoryTrendMonths.length) return const SizedBox();
+                                return Text(
+                                  p.categoryTrendMonths[idx],
+                                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        lineBarsData: p.categoryTrend.asMap().entries.map((e) {
+                          final color = _lineColors[e.key % _lineColors.length];
+                          return LineChartBarData(
+                            spots: e.value.amounts.asMap().entries
+                                .map((a) => FlSpot(a.key.toDouble(), a.value))
+                                .toList(),
+                            isCurved: true,
+                            color: color,
+                            barWidth: 2.5,
+                            dotData: FlDotData(
+                              show: true,
+                              getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                                radius: 3, color: color, strokeWidth: 0,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 6,
+                    children: p.categoryTrend.asMap().entries.map((e) {
+                      final color = _lineColors[e.key % _lineColors.length];
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(e.value.icon, style: const TextStyle(fontSize: 14)),
+                          const SizedBox(width: 4),
+                          Container(width: 20, height: 3,
+                              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+                          const SizedBox(width: 4),
+                          Text(e.value.name,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Category list with trend
+            ...p.categoryTrend.asMap().entries.map((e) {
+              final color = _lineColors[e.key % _lineColors.length];
+              final total = e.value.amounts.fold(0.0, (s, v) => s + v);
+              final last = e.value.amounts.last;
+              final prev = e.value.amounts.length > 1 ? e.value.amounts[e.value.amounts.length - 2] : 0.0;
+              final change = prev > 0 ? ((last - prev) / prev * 100) : 0.0;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: AppCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(e.value.icon, style: const TextStyle(fontSize: 20)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(e.value.name,
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                            Text('Total 6 bulan: ${CurrencyFormatter.compact(total)}',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(CurrencyFormatter.compact(last),
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: color)),
+                          if (change != 0)
+                            Text(
+                              change > 0 ? '+${change.toStringAsFixed(0)}%' : '${change.toStringAsFixed(0)}%',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _type == 'expense'
+                                    ? (change > 0 ? AppColors.expense : AppColors.income)
+                                    : (change > 0 ? AppColors.income : AppColors.expense),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
     );
   }
 }

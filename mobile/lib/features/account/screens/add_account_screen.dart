@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/account_provider.dart';
 import '../models/account_models.dart';
@@ -23,6 +24,12 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
   String _icon = 'account_balance';
   String _color = '#6C5CE7';
   bool _submitting = false;
+
+  static const _colorPresets = [
+    '#6C5CE7', '#0984E3', '#00B894', '#E17055',
+    '#E84393', '#FDCB6E', '#636E72', '#2D3436',
+    '#6AB04C', '#EB4D4B', '#22A6B3', '#BE2EDD',
+  ];
 
   bool get isEditing => widget.existing != null;
 
@@ -223,34 +230,45 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Nama harus diisi' : null,
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // Nama bank / platform
-              const Text('Bank / Platform', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-              const SizedBox(height: 8),
-              Autocomplete<String>(
-                optionsBuilder: (v) => popularBanks.where(
-                  (b) => b.toLowerCase().contains(v.text.toLowerCase()),
-                ),
-                onSelected: (s) {
-                  _bankNameCtrl.text = s;
-                  setState(() {});
-                },
-                fieldViewBuilder: (_, ctrl, focus, onSubmit) {
-                  ctrl.text = _bankNameCtrl.text;
-                  return TextFormField(
-                    controller: ctrl,
-                    focusNode: focus,
-                    onChanged: (v) {
-                      _bankNameCtrl.text = v;
-                      setState(() {});
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Contoh: BCA, GoPay, OVO (opsional)',
-                      prefixIcon: Icon(Icons.business_outlined, color: color),
+              // Warna Kartu
+              const Text('Warna Kartu', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _colorPresets.map((hex) {
+                  final c = Color(int.parse(hex.replaceFirst('#', '0xFF')));
+                  final selected = _color.toLowerCase() == hex.toLowerCase();
+                  return GestureDetector(
+                    onTap: () => setState(() => _color = hex),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(
+                        color: c,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected ? Colors.white : Colors.transparent,
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          if (selected)
+                            BoxShadow(
+                              color: c.withValues(alpha: 0.55),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                        ],
+                      ),
+                      alignment: Alignment.center,
+                      child: selected
+                          ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+                          : null,
                     ),
                   );
-                },
+                }).toList(),
               ),
 
               const SizedBox(height: 16),
@@ -265,6 +283,17 @@ class _AddAccountScreenState extends State<AddAccountScreen> {
                 TextFormField(
                   controller: _balanceCtrl,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onTap: () {
+                    if (_balanceCtrl.text == '0') {
+                      _balanceCtrl.clear();
+                    }
+                  },
+                  onEditingComplete: () {
+                    if (_balanceCtrl.text.isEmpty) {
+                      _balanceCtrl.text = '0';
+                    }
+                  },
                   decoration: InputDecoration(
                     prefixText: 'Rp ',
                     prefixIcon: Icon(Icons.account_balance_wallet_outlined, color: color),

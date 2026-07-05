@@ -112,7 +112,7 @@ export default function CategoriesPage() {
   }
   const openEdit = (c: Category) => {
     setEditing(c)
-    setForm({ name: c.name, type: c.type, icon: c.icon })
+    setForm({ name: c.name, type: c.type, icon: c.icon ?? '' })
     setOpen(true)
   }
 
